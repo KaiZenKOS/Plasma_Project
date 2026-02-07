@@ -1,3 +1,13 @@
+import { Buffer } from "buffer";
+
+const windowWithGlobals = window as Window & {
+  global?: typeof window;
+  Buffer?: typeof Buffer;
+};
+
+windowWithGlobals.global = window;
+windowWithGlobals.Buffer = Buffer;
+
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { PrivyProvider } from "@privy-io/react-auth";
