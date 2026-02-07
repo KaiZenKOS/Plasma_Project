@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import type { ViewKey } from "./types/navigation";
+import { TontineFeatureView } from "./features/tontine";
 import { AssurancePage } from "./pages/AssurancePage";
 import { EscrowPage } from "./pages/EscrowPage";
 import { NexusHubPage } from "./pages/NexusHubPage";
-import { TontinePage } from "./pages/TontinePage";
 
 function App() {
   const [activeView, setActiveView] = useState<ViewKey>("nexus");
@@ -11,7 +11,7 @@ function App() {
   const content = useMemo(() => {
     switch (activeView) {
       case "tontine":
-        return <TontinePage onNavigate={setActiveView} />;
+        return <TontineFeatureView onNavigate={setActiveView} />;
       case "escrow":
         return <EscrowPage onNavigate={setActiveView} />;
       case "assurance":

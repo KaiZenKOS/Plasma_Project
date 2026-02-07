@@ -20,7 +20,7 @@ const explorerUrl =
     ? import.meta.env.VITE_PLASMA_EXPLORER_URL
     : "https://explorer.plasma.chain";
 
-const plasmaChain = defineChain({
+export const plasmaChain = defineChain({
   id: chainId,
   name: chainName,
   network: chainName.toLowerCase().replace(/\s+/g, "-"),
