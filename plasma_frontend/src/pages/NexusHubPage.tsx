@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getUserProfile, getUserScore } from "../api/core";
 import { getHistory } from "../api/history";
 import type { BlockchainEvent, User } from "../api/types";
+import { LoginButton } from "../components/LoginButton";
 import { useUser } from "../context/UserContext";
 import { useUsdtBalance } from "../hooks/useUsdtBalance";
 import type { ViewKey } from "../types/navigation";
@@ -34,15 +35,12 @@ function formatEventTime(value: string) {
 }
 
 export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
-  const { walletAddress, registerUser } = useUser();
+  const { walletAddress } = useUser();
   const [score, setScore] = useState<number | null>(null);
   const [events, setEvents] = useState<BlockchainEvent[]>([]);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [profile, setProfile] = useState<User | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
-  const [walletInput, setWalletInput] = useState("");
-  const [pseudoInput, setPseudoInput] = useState("");
-  const [connecting, setConnecting] = useState(false);
   const {
     balance,
     loading: balanceLoading,
@@ -82,9 +80,17 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
   }, [walletAddress]);
 
   const loadEvents = useCallback(async () => {
+    if (!walletAddress) {
+      setEvents([]);
+      setEventsError(null);
+      return;
+    }
     setEventsError(null);
     try {
-      const data = await getBlockchainEvents(5);
+      const data = await getHistory({
+        address: walletAddress,
+        limit: 5,
+      });
       setEvents(data);
     } catch (error) {
       setEventsError(
@@ -94,7 +100,7 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
       );
       setEvents([]);
     }
-  }, []);
+  }, [walletAddress]);
 
   useEffect(() => {
     loadScore();
@@ -108,34 +114,19 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
     loadEvents();
   }, [loadEvents]);
 
-  const handleConnect = useCallback(async () => {
-    if (!walletInput.trim()) return;
-    setConnecting(true);
-    setProfileError(null);
-    try {
-      const user = await registerUser(
-        walletInput.trim(),
-        pseudoInput.trim() || undefined,
-      );
-      setProfile(user);
-      setWalletInput("");
-      setPseudoInput("");
-    } catch (error) {
-      setProfileError(
-        error instanceof Error ? error.message : "Connexion impossible",
-      );
-    } finally {
-      setConnecting(false);
-    }
-  }, [walletInput, pseudoInput, registerUser]);
-
   const reputation = useMemo(
     () => (score === null ? null : clampScore(score)),
     [score],
   );
   const reputationProgress = reputation ?? 0;
   const isConnected = Boolean(walletAddress);
-  const balanceValue = isConnected ? "Non disponible" : "Connecte ton wallet";
+  const balanceValue = isConnected
+    ? balanceLoading
+      ? "Chargement..."
+      : balance
+        ? `${Number(balance).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} USDT`
+        : "Non disponible"
+    : "Connecte ton wallet";
   const lastEvent = events[0];
   const activityLine = lastEvent
     ? `Derniere activite: ${formatEventLabel(lastEvent)}`
@@ -257,27 +248,8 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
               </div>
             </div>
             {!walletAddress && (
-              <div className="mt-4 space-y-3">
-                <input
-                  value={walletInput}
-                  onChange={(event) => setWalletInput(event.target.value)}
-                  placeholder="Wallet address (0x...)"
-                  className="w-full rounded-xl border border-border bg-muted px-4 py-3 text-sm outline-none"
-                />
-                <input
-                  value={pseudoInput}
-                  onChange={(event) => setPseudoInput(event.target.value)}
-                  placeholder="Pseudo (optionnel)"
-                  className="w-full rounded-xl border border-border bg-muted px-4 py-3 text-sm outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={handleConnect}
-                  disabled={!walletInput.trim() || connecting}
-                  className="w-full rounded-xl bg-primary text-primary-foreground py-3 text-sm font-semibold disabled:opacity-60"
-                >
-                  {connecting ? "Connexion..." : "Connecter"}
-                </button>
+              <div className="mt-4">
+                <LoginButton />
               </div>
             )}
             {profileError && (

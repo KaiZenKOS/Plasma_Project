@@ -45,6 +45,33 @@ Interface Plasma Nexus (React + TypeScript + Vite). Utilise le backend Plasma po
 
 En dev, Vite proxy redirige `/api` vers `http://localhost:3000`. Pour une autre URL backend, définir `VITE_API_URL` (ex. `VITE_API_URL=http://localhost:3000/api`).
 
+## Demarrage rapide Anvil (local)
+
+### 1) Lancer Anvil
+
+```powershell
+anvil --host 127.0.0.1 --port 8545
+```
+
+### 2) Deployer les contrats
+
+```powershell
+Set-Location "C:\Users\theca\Desktop\Projet_Plasma\plasma_blockchain"
+$env:PRIVATE_KEY="<TA_CLE_PRIVEE>"
+forge script script/Deploy.s.sol:Deploy --rpc-url http://127.0.0.1:8545 --broadcast
+```
+
+### 3) Configurer le frontend
+
+```dotenv
+VITE_PLASMA_RPC_URL=http://127.0.0.1:8545
+VITE_PLASMA_CHAIN_ID=31337
+VITE_PLASMA_CHAIN_NAME=Anvil
+VITE_PLASMA_EXPLORER_URL=http://127.0.0.1:8545
+VITE_USDT_ADDRESS=<ADRESSE_MOCK_USDT>
+VITE_TONTINE_CONTRACT_ADDRESS=<ADRESSE_TONTINE_SERVICE>
+```
+
 ## Variables front (hybride)
 
 Créer un `.env` a partir de [plasma_frontend/.env.example](plasma_frontend/.env.example) pour les lectures blockchain :

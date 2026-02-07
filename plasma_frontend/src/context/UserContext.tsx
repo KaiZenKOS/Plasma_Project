@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { upsertUser } from "../api/core";
 import type { User } from "../api/types";
 
@@ -13,41 +21,48 @@ type UserContextValue = {
 const UserContext = createContext<UserContextValue | null>(null);
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
-  const [walletAddress, setWalletAddress] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem("plasma_wallet") ?? null;
-    } catch {
-      return null;
-    }
-  });
+  const { authenticated } = usePrivy();
+  const { wallets } = useWallets();
+  const walletAddress = useMemo(
+    () => (authenticated ? (wallets?.[0]?.address ?? null) : null),
+    [authenticated, wallets],
+  );
   const [user, setUser] = useState<User | null>(null);
 
-  const setWallet = useCallback((address: string | null) => {
-    setWalletAddress(address);
-    setUser(null);
-    try {
-      if (address) localStorage.setItem("plasma_wallet", address);
-      else localStorage.removeItem("plasma_wallet");
-    } catch {}
-  }, []);
+  useEffect(() => {
+    if (!walletAddress) {
+      setUser(null);
+      return;
+    }
+    let active = true;
+    upsertUser(walletAddress, {})
+      .then((u) => {
+        if (active) setUser(u);
+      })
+      .catch(() => {
+        if (active) setUser(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [walletAddress]);
 
-  const registerUser = useCallback(async (address: string, pseudo?: string): Promise<User> => {
-    const normalized = address.toLowerCase().startsWith("0x") ? address : `0x${address}`;
-    const u = await upsertUser(normalized, { pseudo: pseudo ?? null });
-    setWalletAddress(normalized);
-    setUser(u);
-    try {
-      localStorage.setItem("plasma_wallet", normalized);
-    } catch {}
-    return u;
-  }, []);
+  const setWallet = useCallback((_address: string | null) => {}, []);
+
+  const registerUser = useCallback(
+    async (address: string, pseudo?: string): Promise<User> => {
+      const normalized = address.toLowerCase().startsWith("0x")
+        ? address
+        : `0x${address}`;
+      const u = await upsertUser(normalized, { pseudo: pseudo ?? null });
+      setUser(u);
+      return u;
+    },
+    [],
+  );
 
   const clearUser = useCallback(() => {
-    setWalletAddress(null);
     setUser(null);
-    try {
-      localStorage.removeItem("plasma_wallet");
-    } catch {}
   }, []);
 
   const value = useMemo<UserContextValue>(
@@ -58,7 +73,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       registerUser,
       clearUser,
     }),
-    [walletAddress, user, setWallet, registerUser, clearUser]
+    [walletAddress, user, setWallet, registerUser, clearUser],
   );
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;

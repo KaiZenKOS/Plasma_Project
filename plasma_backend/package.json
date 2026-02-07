@@ -11,13 +11,15 @@
     "worker:insurance": "tsx src/workers/insuranceWorker.ts"
   },
   "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^16.4.5",
     "express": "^4.21.0",
-    "pg": "^8.13.0",
-    "viem": "^2.21.0",
     "node-cron": "^3.0.3",
-    "dotenv": "^16.4.5"
+    "pg": "^8.13.0",
+    "viem": "^2.21.0"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
     "@types/express": "^4.17.21",
     "@types/node": "^22.0.0",
     "@types/node-cron": "^3.0.11",
