@@ -14,6 +14,7 @@ import { PrivyProvider } from "@privy-io/react-auth";
 import "./index.css";
 import App from "./App.tsx";
 import { UserProvider } from "./context/UserContext";
+import { PrivateKeyWalletProvider } from "./context/PrivateKeyWalletContext";
 import { plasmaChain } from "./blockchain/viem";
 
 createRoot(document.getElementById("root")!).render(
@@ -21,21 +22,30 @@ createRoot(document.getElementById("root")!).render(
     <PrivyProvider
       appId={import.meta.env.VITE_PRIVY_APP_ID}
       config={{
-        loginMethods: ["wallet", "email", "google"],
+        // Wallet login first to make MetaMask option prominent
+        loginMethods: ["wallet", "email"],
         appearance: {
           theme: "light",
           accentColor: "#295c4f",
           logo: "https://ton-logo-url.com/logo.png",
-          showWalletLoginFirst: false,
+          // Show wallet login first to make MetaMask option obvious
+          showWalletLoginFirst: true,
+          // Prioritize external wallets (MetaMask first)
+          walletList: ["metamask", "detected_wallets"],
         },
-        embeddedWallets: { createOnLogin: "users-without-wallets" },
+        // Only create embedded wallet for users without a wallet (email/phone flow)
+        embeddedWallets: {
+          createOnLogin: "users-without-wallets",
+        },
         supportedChains: [plasmaChain],
         defaultChain: plasmaChain,
       }}
     >
-      <UserProvider>
-        <App />
-      </UserProvider>
+      <PrivateKeyWalletProvider>
+        <UserProvider>
+          <App />
+        </UserProvider>
+      </PrivateKeyWalletProvider>
     </PrivyProvider>
   </StrictMode>,
 );
