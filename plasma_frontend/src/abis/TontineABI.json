@@ -1,0 +1,30 @@
+[
+  {
+    "type": "function",
+    "name": "getTontineDetails",
+    "inputs": [{ "name": "tontineId", "type": "bytes32" }],
+    "outputs": [
+      { "name": "name", "type": "string" },
+      { "name": "contributionAmount", "type": "uint256" },
+      { "name": "currentTurnIndex", "type": "uint256" },
+      { "name": "totalMembers", "type": "uint256" },
+      { "name": "poolBalance", "type": "uint256" },
+      { "name": "status", "type": "uint8" }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingWithdrawals",
+    "inputs": [{ "name": "user", "type": "address" }],
+    "outputs": [{ "name": "amount", "type": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "currentBeneficiary",
+    "inputs": [{ "name": "tontineId", "type": "bytes32" }],
+    "outputs": [{ "name": "beneficiary", "type": "address" }],
+    "stateMutability": "view"
+  }
+]

@@ -1,8 +1,1 @@
-export type ViewKey =
-  | "login"
-  | "onboarding"
-  | "dashboard"
-  | "send"
-  | "tontine"
-  | "profile"
-  | "protection";
+export type ViewKey = "nexus" | "tontine" | "escrow" | "assurance";
