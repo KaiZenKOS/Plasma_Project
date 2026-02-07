@@ -1,32 +1,45 @@
 import { useMemo, useState } from "react";
+import type { ViewKey } from "./types/navigation";
+import { useUser } from "./context/UserContext";
 import { Dashboard } from "./pages/Dashboard";
 import { Login } from "./pages/Login";
 import { OnboardingWelcome } from "./pages/OnboardingWelcome";
 import { SendMoney } from "./pages/SendMoney";
-
-type ViewKey = "login" | "onboarding" | "dashboard" | "send";
+import { TontinePage } from "./pages/TontinePage";
+import { ProfilePage } from "./pages/ProfilePage";
+import { ProtectionPage } from "./pages/ProtectionPage";
 
 const views: { key: ViewKey; label: string }[] = [
   { key: "login", label: "Login" },
   { key: "onboarding", label: "Onboarding" },
   { key: "dashboard", label: "Dashboard" },
-  { key: "send", label: "Send Money" },
+  { key: "send", label: "Send" },
+  { key: "tontine", label: "Tontine" },
+  { key: "profile", label: "Profile" },
+  { key: "protection", label: "Protection" },
 ];
 
 function App() {
-  const [activeView, setActiveView] = useState<ViewKey>("login");
+  const { walletAddress } = useUser();
+  const [activeView, setActiveView] = useState<ViewKey>(walletAddress ? "dashboard" : "login");
 
   const content = useMemo(() => {
     switch (activeView) {
       case "onboarding":
-        return <OnboardingWelcome />;
+        return <OnboardingWelcome onNext={() => setActiveView("dashboard")} />;
       case "dashboard":
-        return <Dashboard />;
+        return <Dashboard onNavigate={setActiveView} />;
       case "send":
-        return <SendMoney />;
+        return <SendMoney onBack={() => setActiveView("dashboard")} onTontine={() => setActiveView("tontine")} />;
+      case "tontine":
+        return <TontinePage onBack={() => setActiveView("dashboard")} />;
+      case "profile":
+        return <ProfilePage onBack={() => setActiveView("dashboard")} onLogout={() => setActiveView("login")} />;
+      case "protection":
+        return <ProtectionPage onBack={() => setActiveView("dashboard")} />;
       case "login":
       default:
-        return <Login />;
+        return <Login onSuccess={() => setActiveView("dashboard")} />;
     }
   }, [activeView]);
 

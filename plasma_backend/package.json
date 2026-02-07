@@ -1,0 +1,28 @@
+{
+  "name": "plasma-backend",
+  "version": "1.0.0",
+  "description": "Backend orchestrateur Plasma - Score déterministe, indexer blockchain, assurance paramétrique",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "worker": "tsx src/workers/blockchainIndexer.ts",
+    "worker:insurance": "tsx src/workers/insuranceWorker.ts"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "pg": "^8.13.0",
+    "viem": "^2.21.0",
+    "node-cron": "^3.0.3",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.0.0",
+    "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.11.6",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

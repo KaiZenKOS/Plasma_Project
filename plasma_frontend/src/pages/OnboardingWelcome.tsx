@@ -1,10 +1,12 @@
 import { Icon } from "@iconify/react";
 
-export function OnboardingWelcome() {
+type OnboardingWelcomeProps = { onNext?: () => void };
+
+export function OnboardingWelcome({ onNext }: OnboardingWelcomeProps) {
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground font-sans relative">
       <header className="flex justify-end items-center px-6 pt-12">
-        <button className="text-sm font-semibold text-primary px-4 py-2 active:opacity-70 transition-opacity">
+        <button onClick={onNext} className="text-sm font-semibold text-primary px-4 py-2 active:opacity-70 transition-opacity">
           Skip
         </button>
       </header>
@@ -63,7 +65,7 @@ export function OnboardingWelcome() {
         </p>
       </div>
       <footer className="px-6 pb-12">
-        <button className="w-full bg-primary text-primary-foreground py-5 rounded-2xl font-bold text-lg shadow-lg shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+        <button onClick={onNext} className="w-full bg-primary text-primary-foreground py-5 rounded-2xl font-bold text-lg shadow-lg shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
           Next
           <Icon icon="solar:arrow-right-linear" className="size-6" />
         </button>

@@ -1,3 +1,17 @@
+# Plasma Frontend
+
+Interface Plasma Nexus (React + TypeScript + Vite). Utilise le backend Plasma pour le profil, le score et les tontines.
+
+## Lancer avec le backend
+
+1. Démarrer la base : `cd plasma_database && docker compose up -d`
+2. Démarrer le backend : `cd plasma_backend && npm run dev`
+3. Démarrer le frontend : `npm run dev`
+
+En dev, Vite proxy redirige `/api` vers `http://localhost:3000`. Pour une autre URL backend, définir `VITE_API_URL` (ex. `VITE_API_URL=http://localhost:3000/api`).
+
+---
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

@@ -1,6 +1,36 @@
+import { useState } from "react";
 import { Icon } from "@iconify/react";
+import { useUser } from "../context/UserContext";
 
-export function Login() {
+const DEMO_WALLET = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+
+type LoginProps = { onSuccess: () => void };
+
+export function Login({ onSuccess }: LoginProps) {
+  const { registerUser } = useUser();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [comingSoon, setComingSoon] = useState(false);
+
+  function showComingSoon() {
+    setComingSoon(true);
+    setError(null);
+    setTimeout(() => setComingSoon(false), 2500);
+  }
+
+  async function handleDemoWallet() {
+    setError(null);
+    setLoading(true);
+    try {
+      await registerUser(DEMO_WALLET, "Demo User");
+      onSuccess();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Connection failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground font-sans px-8 py-12 relative overflow-hidden">
       <div className="absolute -top-24 -left-24 size-64 bg-primary/10 rounded-full blur-3xl opacity-50" />
@@ -21,7 +51,33 @@ export function Login() {
         </div>
       </header>
       <div className="flex-none flex flex-col gap-4 w-full max-w-sm mx-auto z-10 mb-12">
-        <button className="flex items-center gap-4 w-full p-4 rounded-2xl bg-card border border-border hover:bg-secondary transition-colors group active:scale-[0.98]">
+        {error && (
+          <div className="rounded-2xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+        {comingSoon && (
+          <div className="rounded-2xl bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-primary">
+            Coming soon — use demo wallet for now
+          </div>
+        )}
+        <button
+          onClick={handleDemoWallet}
+          disabled={loading}
+          className="flex items-center gap-4 w-full p-4 rounded-2xl bg-primary text-primary-foreground hover:opacity-90 transition-opacity group active:scale-[0.98] disabled:opacity-70"
+        >
+          <div className="size-10 rounded-xl bg-white/20 flex items-center justify-center">
+            <Icon icon="solar:wallet-bold" className="size-6" />
+          </div>
+          <span className="font-semibold">
+            {loading ? "Connecting…" : "Use demo wallet (backend)"}
+          </span>
+          <Icon
+            icon="solar:arrow-right-linear"
+            className="size-5 ml-auto opacity-80 group-hover:translate-x-1 transition-transform"
+          />
+        </button>
+        <button onClick={showComingSoon} className="flex items-center gap-4 w-full p-4 rounded-2xl bg-card border border-border hover:bg-secondary transition-colors group active:scale-[0.98]">
           <div className="size-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
             <Icon icon="logos:google-icon" className="size-5" />
           </div>
@@ -31,7 +87,7 @@ export function Login() {
             className="size-5 ml-auto text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
           />
         </button>
-        <button className="flex items-center gap-4 w-full p-4 rounded-2xl bg-card border border-border hover:bg-secondary transition-colors group active:scale-[0.98]">
+        <button onClick={showComingSoon} className="flex items-center gap-4 w-full p-4 rounded-2xl bg-card border border-border hover:bg-secondary transition-colors group active:scale-[0.98]">
           <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
             <Icon icon="solar:letter-bold" className="size-6" />
           </div>
@@ -41,7 +97,7 @@ export function Login() {
             className="size-5 ml-auto text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
           />
         </button>
-        <button className="flex items-center gap-4 w-full p-4 rounded-2xl bg-card border border-border hover:bg-secondary transition-colors group active:scale-[0.98]">
+        <button onClick={showComingSoon} className="flex items-center gap-4 w-full p-4 rounded-2xl bg-card border border-border hover:bg-secondary transition-colors group active:scale-[0.98]">
           <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
             <Icon icon="solar:face-id-bold" className="size-6" />
           </div>
@@ -60,12 +116,12 @@ export function Login() {
       </div>
       <footer className="mt-auto text-center z-10">
         <p className="text-[10px] leading-relaxed text-muted-foreground max-w-[240px] mx-auto opacity-70">
-          By continuing, you agree to our
-          <button className="underline decoration-muted-foreground/50 hover:text-foreground">
+          By continuing, you agree to our{" "}
+          <button type="button" className="underline decoration-muted-foreground/50 hover:text-foreground">
             Terms
           </button>{" "}
           &{" "}
-          <button className="underline decoration-muted-foreground/50 hover:text-foreground">
+          <button type="button" className="underline decoration-muted-foreground/50 hover:text-foreground">
             Privacy Policy
           </button>
         </p>
