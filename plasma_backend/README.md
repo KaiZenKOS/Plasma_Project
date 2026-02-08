@@ -1,6 +1,6 @@
 # Plasma Backend
 
-Backend orchestrateur modulaire : routes Plug & Play, scoring déterministe (sans IA), indexer blockchain (Viem), worker assurance paramétrique (mock OpenWeatherMap).
+Backend orchestrateur modulaire : routes Plug & Play, scoring déterministe (sans IA), indexer blockchain (Viem).
 
 ## Base de données (Docker)
 
@@ -40,7 +40,6 @@ Le backend écoute sur http://localhost:3000 et utilise la base `postgres` du r�
 - `npm run dev` — API en mode watch
 - `npm run start` — API (après build)
 - `npm run worker` — Indexer blockchain (ContributionPaid, CollateralSlashed)
-- `npm run worker:insurance` — CRON assurance météo (mock)
 
 ## Routes
 

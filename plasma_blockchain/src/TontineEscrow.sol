@@ -110,7 +110,7 @@ contract TontineEscrow is Ownable {
         uint256 frequencySeconds,
         uint256 collateralAmount,
         address serviceProvider
-    ) external onlyOwner onlyRegistered returns (uint256 tontineId) {
+    ) external onlyRegistered returns (uint256 tontineId) {
         tontineId = nextTontineId++;
         tontineGroups[tontineId] = TontineGroup({
             contributionAmount: contributionAmount,

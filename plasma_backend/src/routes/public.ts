@@ -159,6 +159,19 @@ publicRouter.get("/history/backfill", async (req: Request, res: Response) => {
       [log.transactionHash, Number(log.blockNumber), methodName],
     );
     if (existing.rows.length > 0) continue;
+    // Serialize BigInt values in log.args before JSON.stringify
+    let serializedArgs: string | null = null;
+    if (log.args) {
+      try {
+        serializedArgs = JSON.stringify(log.args, (key, value) =>
+          typeof value === "bigint" ? value.toString() : value
+        );
+      } catch (e) {
+        console.error("Failed to serialize log.args:", e);
+        serializedArgs = null;
+      }
+    }
+
     await query(
       `INSERT INTO blockchain_events (tx_hash, block_number, method_name, from_address, to_address, payload)
        VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -168,7 +181,7 @@ publicRouter.get("/history/backfill", async (req: Request, res: Response) => {
         methodName,
         fromAddress,
         contractLower,
-        log.args ? JSON.stringify(log.args) : null,
+        serializedArgs,
       ],
     );
     inserted++;

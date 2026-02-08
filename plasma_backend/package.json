@@ -1,14 +1,13 @@
 {
   "name": "plasma-backend",
   "version": "1.0.0",
-  "description": "Backend orchestrateur Plasma - Score déterministe, indexer blockchain, assurance paramétrique",
+  "description": "Backend orchestrateur Plasma - Score déterministe, indexer blockchain",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "worker": "tsx src/workers/blockchainIndexer.ts",
-    "worker:insurance": "tsx src/workers/insuranceWorker.ts",
     "migrate": "tsx scripts/migrate-tontine-escrow.ts",
     "migrate:simple": "tsx scripts/migrate-simple-tontine.ts",
     "migrate:sign": "tsx scripts/migrate-sign-and-turn.ts",

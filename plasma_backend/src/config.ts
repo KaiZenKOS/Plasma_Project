@@ -15,8 +15,4 @@ export const config = {
     usdtAddress: (process.env.USDT_ADDRESS ?? "0x502012b361aebce43b26ec812b74d9a51db4d412") as `0x${string}`,
     fromBlock: BigInt(process.env.FROM_BLOCK ?? "0"),
   },
-  insurance: {
-    openWeatherApiKey: process.env.OPENWEATHER_API_KEY ?? "",
-    cronSchedule: process.env.INSURANCE_CRON ?? "0 */6 * * *", // toutes les 6h
-  },
 };

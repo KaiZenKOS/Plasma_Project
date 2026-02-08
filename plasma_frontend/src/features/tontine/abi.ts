@@ -104,6 +104,42 @@ export const TONTINE_ABI = [
       { name: "collateralAmount", type: "uint256", indexed: false },
     ],
   },
+  {
+    type: "event",
+    name: "MemberJoined",
+    inputs: [
+      { name: "tontineId", type: "uint256", indexed: true },
+      { name: "member", type: "address", indexed: true },
+      { name: "turnPosition", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "ContributionPaid",
+    inputs: [
+      { name: "tontineId", type: "uint256", indexed: true },
+      { name: "member", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+      { name: "turnIndex", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "PayoutSent",
+    inputs: [
+      { name: "tontineId", type: "uint256", indexed: true },
+      { name: "beneficiary", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "Withdrawal",
+    inputs: [
+      { name: "user", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
 ] as const;
 
 /**

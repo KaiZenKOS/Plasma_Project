@@ -13,9 +13,11 @@
     "@iconify/react": "^5.0.2",
     "@privy-io/react-auth": "^3.13.1",
     "buffer": "^6.0.3",
+    "jspdf": "^4.1.0",
     "lucide-react": "^0.538.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-qr-code": "^2.0.18",
     "viem": "^2.45.1"
   },
   "devDependencies": {

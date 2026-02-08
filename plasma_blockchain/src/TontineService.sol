@@ -71,7 +71,7 @@ contract TontineService is Ownable {
         uint256 contributionAmount,
         uint256 frequencySeconds,
         uint256 collateralAmount
-    ) external onlyOwner onlyRegistered returns (uint256 tontineId) {
+    ) external onlyRegistered returns (uint256 tontineId) {
         tontineId = nextTontineId++;
         tontineGroups[tontineId] = TontineGroup({
             contributionAmount: contributionAmount,
