@@ -210,6 +210,9 @@ export function EscrowDashboard() {
       // Wait for confirmation
       await publicClient.waitForTransactionReceipt({ hash: depositHash });
       
+      // Trigger history refresh
+      window.dispatchEvent(new CustomEvent("transaction-confirmed", { detail: { txHash: depositHash } }));
+      
       // Clear form
       setNewBeneficiary("");
       setNewAmount("");
@@ -284,6 +287,9 @@ export function EscrowDashboard() {
       // Wait for confirmation
       await publicClient.waitForTransactionReceipt({ hash: depositHash });
       
+      // Trigger history refresh
+      window.dispatchEvent(new CustomEvent("transaction-confirmed", { detail: { txHash: depositHash } }));
+      
       // Reload data
       await loadEngagements();
       await reloadBalance();
@@ -345,6 +351,9 @@ export function EscrowDashboard() {
       
       // Wait for confirmation
       await publicClient.waitForTransactionReceipt({ hash: releaseHash });
+      
+      // Trigger history refresh
+      window.dispatchEvent(new CustomEvent("transaction-confirmed", { detail: { txHash: releaseHash } }));
       
       // Reload data
       await loadEngagements();

@@ -1,15 +1,38 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { formatUnits } from "viem";
-import { Users, DollarSign, Loader2 } from "lucide-react";
+import { formatUnits, parseUnits } from "viem";
+import { Users, DollarSign, Loader2, Unlock, CheckCircle } from "lucide-react";
 import { useUser } from "../context/UserContext";
 import { useWalletClient } from "../features/tontine/hooks/useWalletClient";
 import { useTontineWrite } from "../features/tontine/hooks/useTontineWrite";
+import { useUsdtAllowance } from "../features/tontine/hooks/useUsdtAllowance";
 import { useTontineToast } from "../features/tontine/context/ToastContext";
 import { publicClient } from "../blockchain/viem";
 import { TONTINE_CONTRACT_ADDRESS, USDT_DECIMALS } from "../features/tontine/config";
 import { TONTINE_ABI } from "../features/tontine/abi";
 import { PrivyAuthButton } from "../components/PrivyAuthButton";
+
+const EXPLORER_URL = typeof import.meta.env.VITE_PLASMA_EXPLORER_URL === "string" && import.meta.env.VITE_PLASMA_EXPLORER_URL
+  ? import.meta.env.VITE_PLASMA_EXPLORER_URL
+  : "https://testnet.plasmascan.to";
+
+const USDT_ADDRESS =
+  typeof import.meta.env.VITE_USDT_ADDRESS === "string" && import.meta.env.VITE_USDT_ADDRESS
+    ? (import.meta.env.VITE_USDT_ADDRESS as `0x${string}`)
+    : null;
+
+const ERC20_ABI = [
+  {
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    name: "approve",
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+] as const;
 
 export function TontineJoinPage() {
   const { id } = useParams<{ id: string }>();
@@ -21,12 +44,25 @@ export function TontineJoinPage() {
 
   const [tontineData, setTontineData] = useState<{
     contributionAmount: string;
+    contributionAmountWei: bigint;
     memberCount: number;
     active: boolean;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [approveHash, setApproveHash] = useState<`0x${string}` | null>(null);
+
+  // Check USDT allowance
+  const { allowance, loading: allowanceLoading, reload: reloadAllowance } = useUsdtAllowance(
+    walletAddress,
+    TONTINE_CONTRACT_ADDRESS,
+  );
+
+  // Determine if approval is needed
+  const needsApproval = allowance !== null && tontineData !== null && allowance < tontineData.contributionAmountWei;
+  const hasEnoughAllowance = allowance !== null && tontineData !== null && allowance >= tontineData.contributionAmountWei;
 
   // Fetch tontine details
   useEffect(() => {
@@ -71,6 +107,7 @@ export function TontineJoinPage() {
 
         setTontineData({
           contributionAmount: formatUnits(g[0], USDT_DECIMALS),
+          contributionAmountWei: g[0],
           memberCount,
           active: g[6],
         });
@@ -85,14 +122,72 @@ export function TontineJoinPage() {
     loadTontine();
   }, [id]);
 
+  // Wait for approval transaction receipt
+  useEffect(() => {
+    if (!approveHash || !walletClient) return;
+
+    const waitForApproval = async () => {
+      try {
+        await publicClient.waitForTransactionReceipt({ hash: approveHash });
+        setApproving(false);
+        toast("USDT approuvé avec succès!", "success");
+        // Reload allowance to update UI
+        await reloadAllowance();
+        setApproveHash(null);
+      } catch (err) {
+        setApproving(false);
+        console.error("Error waiting for approval receipt:", err);
+        toast("Erreur lors de l'approbation", "error");
+        setApproveHash(null);
+      }
+    };
+
+    waitForApproval();
+  }, [approveHash, walletClient, toast, reloadAllowance]);
+
+  // Handle USDT approval
+  const handleApprove = useCallback(async () => {
+    if (!USDT_ADDRESS || !TONTINE_CONTRACT_ADDRESS || !walletClient?.account || !tontineData) {
+      toast("Configuration manquante ou montant invalide", "error");
+      return;
+    }
+
+    setApproving(true);
+    setApproveHash(null);
+
+    try {
+      const hash = await walletClient.writeContract({
+        address: USDT_ADDRESS,
+        abi: ERC20_ABI,
+        functionName: "approve",
+        args: [TONTINE_CONTRACT_ADDRESS, tontineData.contributionAmountWei],
+        account: walletClient.account,
+      });
+
+      setApproveHash(hash);
+      toast(`Approbation envoyée! Hash: ${hash.slice(0, 10)}…`, "success");
+    } catch (err) {
+      setApproving(false);
+      const msg = err instanceof Error ? err.message : "Erreur lors de l'approbation";
+      toast(msg, "error");
+      setApproveHash(null);
+    }
+  }, [walletClient, tontineData, toast]);
+
+  // Handle join tontine
   const handleJoin = useCallback(async () => {
     if (!id || !walletAddress || !walletClient) {
-      toast.error("Please connect your wallet first");
+      toast("Please connect your wallet first", "error");
       return;
     }
 
     if (!tontineData?.active) {
-      toast.error("This tontine is not active");
+      toast("This tontine is not active", "error");
+      return;
+    }
+
+    if (needsApproval) {
+      toast("Veuillez d'abord approuver l'utilisation de USDT", "error");
       return;
     }
 
@@ -100,7 +195,9 @@ export function TontineJoinPage() {
     try {
       const result = await joinTontine(BigInt(id));
       if (result?.hash) {
-        toast.success(`Transaction sent! Hash: ${result.hash.slice(0, 10)}...`);
+        toast(`Transaction sent! Hash: ${result.hash.slice(0, 10)}...`, "success");
+        // Trigger history refresh
+        window.dispatchEvent(new CustomEvent("transaction-confirmed", { detail: { txHash: result.hash } }));
         // Navigate to tontine list after a delay
         setTimeout(() => {
           navigate("/tontine");
@@ -108,11 +205,16 @@ export function TontineJoinPage() {
       }
     } catch (err) {
       console.error("Error joining tontine:", err);
-      toast.error(err instanceof Error ? err.message : "Failed to join tontine");
+      toast(err instanceof Error ? err.message : "Failed to join tontine", "error");
     } finally {
       setJoining(false);
     }
-  }, [id, walletAddress, walletClient, tontineData, joinTontine, toast, navigate]);
+  }, [id, walletAddress, walletClient, tontineData, joinTontine, toast, navigate, needsApproval]);
+
+  const isApproving = approving || approveHash !== null;
+  const isJoining = joining || txState === "confirming";
+  const canApprove = !isApproving && !isJoining && tontineData !== null && needsApproval;
+  const canJoin = !isApproving && !isJoining && tontineData !== null && hasEnoughAllowance;
 
   if (loading) {
     return (
@@ -192,6 +294,37 @@ export function TontineJoinPage() {
                   {tontineData.active ? "🟢 Active" : "🔴 Inactive"}
                 </p>
               </div>
+
+              {/* Allowance Status */}
+              {walletAddress && TONTINE_CONTRACT_ADDRESS && (
+                <div className="rounded-xl border border-[#e5e7eb] bg-[#f8fafc] p-4 space-y-2">
+                  {allowanceLoading ? (
+                    <p className="text-sm text-[#6b7280]">Vérification de l'approbation USDT...</p>
+                  ) : allowance !== null ? (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-[#4a4a4a]">Approbation USDT:</span>
+                        <span className={`text-sm font-semibold ${hasEnoughAllowance ? "text-[#10b981]" : "text-[#f59e0b]"}`}>
+                          {formatUnits(allowance, USDT_DECIMALS)} / {tontineData.contributionAmount} USDT
+                        </span>
+                      </div>
+                      {needsApproval && (
+                        <p className="text-xs text-[#f59e0b]">
+                          ⚠️ Approbation insuffisante. Approuvez d'abord l'utilisation de USDT.
+                        </p>
+                      )}
+                      {hasEnoughAllowance && (
+                        <p className="text-xs text-[#10b981] flex items-center gap-1">
+                          <CheckCircle className="size-3" />
+                          Approbation suffisante. Vous pouvez rejoindre la tontine.
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm text-[#6b7280]">Impossible de vérifier l'approbation USDT</p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Action */}
@@ -200,21 +333,57 @@ export function TontineJoinPage() {
                 <p className="text-sm text-[#6b7280] text-center">Connect your wallet to join</p>
                 <PrivyAuthButton />
               </div>
+            ) : needsApproval ? (
+              <button
+                onClick={handleApprove}
+                disabled={!canApprove || !walletClient}
+                className="w-full py-4 rounded-xl bg-[#f59e0b] text-white font-semibold text-lg hover:bg-[#d97706] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isApproving ? (
+                  <>
+                    <div className="size-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Approbation en cours...
+                  </>
+                ) : (
+                  <>
+                    <Unlock className="size-5" />
+                    🔓 Unlock USDT ({tontineData.contributionAmount} USDT)
+                  </>
+                )}
+              </button>
             ) : (
               <button
                 onClick={handleJoin}
-                disabled={joining || !tontineData.active || txState === "confirming"}
+                disabled={!canJoin || !tontineData.active || txState === "confirming"}
                 className="w-full py-4 rounded-xl bg-[#295c4f] text-white font-semibold text-lg hover:bg-[#1f4a3f] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {joining || txState === "confirming" ? (
+                {isJoining ? (
                   <>
                     <Loader2 className="size-5 animate-spin" />
                     Processing...
                   </>
                 ) : (
-                  "Pay & Join"
+                  <>
+                    <CheckCircle className="size-5" />
+                    ✅ Pay & Join
+                  </>
                 )}
               </button>
+            )}
+
+            {approveHash && (
+              <div className="mt-4 rounded-xl border-2 border-[#f59e0b] bg-[#f59e0b]/5 p-4 space-y-2">
+                <p className="text-sm font-semibold text-[#f59e0b]">Approbation envoyée!</p>
+                <a
+                  href={`${EXPLORER_URL}/tx/${approveHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-sm text-[#f59e0b] hover:underline break-all"
+                >
+                  Voir sur l'explorateur: {approveHash.slice(0, 10)}…{approveHash.slice(-8)}
+                </a>
+                <p className="text-xs text-[#6b7280]">En attente de confirmation...</p>
+              </div>
             )}
 
             {txError && (
@@ -231,4 +400,3 @@ export function TontineJoinPage() {
     </div>
   );
 }
-

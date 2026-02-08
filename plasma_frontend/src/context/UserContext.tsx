@@ -35,11 +35,16 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     let active = true;
+    // Non-blocking: Don't wait for API response to render the app
+    // The app should work even if backend is unavailable
     upsertUser(walletAddress, {})
       .then((u) => {
         if (active) setUser(u);
       })
-      .catch(() => {
+      .catch((err) => {
+        // Silently fail - backend might not be available
+        // This is expected in development or if backend is down
+        console.warn("[UserContext] Failed to upsert user (backend may be unavailable):", err);
         if (active) setUser(null);
       });
     return () => {

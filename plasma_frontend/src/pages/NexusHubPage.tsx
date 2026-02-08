@@ -1,11 +1,11 @@
 import { Icon } from "@iconify/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getUserProfile, getUserScore } from "../api/core";
-import { backfillHistory, getHistory } from "../api/history";
 import { getTontineGroups } from "../api/tontine";
-import type { BlockchainEvent, User } from "../api/types";
+import type { User } from "../api/types";
 import type { TontineGroup } from "../api/types";
 import { LoginButton } from "../components/LoginButton";
+import { SmartHistory } from "../components/SmartHistory";
 import { useUser } from "../context/UserContext";
 import { useNativeBalance } from "../hooks/useNativeBalance";
 import { useUsdtBalance } from "../hooks/useUsdtBalance";
@@ -20,35 +20,10 @@ function clampScore(score: number) {
   return Math.max(0, Math.min(100, score));
 }
 
-function formatEventLabel(event: BlockchainEvent) {
-  const labels: Record<string, string> = {
-    TontineCreated: "Tontine créée",
-    MemberJoined: "Membre rejoint",
-    ContributionPaid: "Cotisation payée",
-    CollateralSlashed: "Collateral slashed",
-  };
-  if (event.method_name && labels[event.method_name]) return labels[event.method_name];
-  if (event.method_name) return event.method_name;
-  if (event.to_address) return `Tx vers ${event.to_address.slice(0, 6)}...`;
-  return "Événement blockchain";
-}
-
-function formatEventTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Just now";
-  return date.toLocaleString("fr-FR", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
   const { walletAddress } = useUser();
   const [score, setScore] = useState<number | null>(null);
-  const [events, setEvents] = useState<BlockchainEvent[]>([]);
-  const [eventsError, setEventsError] = useState<string | null>(null);
   const [profile, setProfile] = useState<User | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [tontineGroups, setTontineGroups] = useState<TontineGroup[]>([]);
@@ -97,40 +72,6 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
     }
   }, [walletAddress]);
 
-  const loadEvents = useCallback(async () => {
-    if (!walletAddress) {
-      setEvents([]);
-      setEventsError(null);
-      return;
-    }
-    setEventsError(null);
-    try {
-      let data = await getHistory({
-        address: walletAddress,
-        limit: 30,
-      });
-      if (data.length === 0) {
-        try {
-          await backfillHistory(walletAddress);
-          data = await getHistory({ address: walletAddress, limit: 30 });
-        } catch {
-          // backfill optionnel (backend peut ne pas avoir TONTINE_SERVICE_ADDRESS)
-        }
-      }
-      setEvents(data);
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : "Impossible de charger les events";
-      setEventsError(
-        msg === "Failed to fetch" ||
-          msg.includes("Backend unreachable") ||
-          msg.includes("Backend injoignable")
-          ? "Backend unreachable. Start it with: cd plasma_backend && npm run dev"
-          : msg,
-      );
-      setEvents([]);
-    }
-  }, [walletAddress]);
-
   useEffect(() => {
     loadScore();
   }, [loadScore]);
@@ -138,10 +79,6 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
-
-  useEffect(() => {
-    loadEvents();
-  }, [loadEvents]);
 
   const loadTontines = useCallback(async () => {
     if (!walletAddress) {
@@ -160,13 +97,12 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
     loadTontines();
   }, [loadTontines]);
 
-  // Rafraîchir soldes et historique quand l'onglet redevient visible ou toutes les 30s
+  // Rafraîchir soldes quand l'onglet redevient visible ou toutes les 30s
   useEffect(() => {
     if (!walletAddress) return;
     const refresh = () => {
       reloadUsdtBalance();
       reloadXplBalance();
-      loadEvents();
       loadTontines();
     };
     const onVisibility = () => {
@@ -178,7 +114,7 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
       document.removeEventListener("visibilitychange", onVisibility);
       clearInterval(interval);
     };
-  }, [walletAddress, reloadUsdtBalance, reloadXplBalance, loadEvents, loadTontines]);
+  }, [walletAddress, reloadUsdtBalance, reloadXplBalance, loadTontines]);
 
   const reputation = useMemo(
     () => (score === null ? null : clampScore(score)),
@@ -200,9 +136,8 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
     if (xplError) return "Indisponible";
     return "-";
   })();
-  const lastEvent = events[0];
-  const activityLine = lastEvent
-    ? `Derniere activite: ${formatEventLabel(lastEvent)}`
+  const activityLine = walletAddress
+    ? "Historique en temps réel depuis la blockchain"
     : "Aucune activite recente";
 
   return (
@@ -457,68 +392,15 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
           </div>
         </div>
         <div className="mt-2 bg-muted/50 py-8 px-6 rounded-t-3xl min-h-[200px]">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold font-heading text-foreground">
+          <div className="mb-6">
+            <h3 className="text-lg font-bold font-heading text-foreground mb-2">
               Historique des transactions
             </h3>
-            <button
-              type="button"
-              onClick={loadEvents}
-              className="text-sm font-medium text-primary"
-            >
-              Rafraîchir
-            </button>
+            <p className="text-xs text-muted-foreground">
+              Données en temps réel depuis la blockchain Plasma Testnet
+            </p>
           </div>
-          {!walletAddress ? (
-            <div className="rounded-2xl bg-white border border-border px-4 py-6 text-sm text-muted-foreground text-center">
-              Connecte ton wallet pour voir l&apos;historique.
-            </div>
-          ) : eventsError ? (
-            <div className="rounded-2xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-              {eventsError}
-            </div>
-          ) : events.length === 0 ? (
-            <div className="rounded-2xl bg-white border border-border px-4 py-6 text-sm text-muted-foreground text-center">
-              Aucune transaction pour ce wallet.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {events.map((event) => (
-                <a
-                  key={`${event.tx_hash}-${event.block_number}`}
-                  href={
-                    import.meta.env.VITE_PLASMA_EXPLORER_URL
-                      ? `${import.meta.env.VITE_PLASMA_EXPLORER_URL}/tx/${event.tx_hash}`
-                      : "#"
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between rounded-xl bg-white border border-border px-4 py-3 hover:bg-muted/30 transition-colors"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex items-center justify-center size-10 rounded-full bg-primary/10 shrink-0">
-                      <Icon
-                        icon="solar:wallet-money-bold"
-                        className="size-5 text-primary"
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-foreground truncate">
-                        {formatEventLabel(event)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatEventTime(event.created_at)} · Bloc {event.block_number}
-                      </p>
-                    </div>
-                  </div>
-                  <Icon
-                    icon="solar:alt-arrow-right-linear"
-                    className="size-5 text-muted-foreground shrink-0 ml-2"
-                  />
-                </a>
-              ))}
-            </div>
-          )}
+          <SmartHistory />
         </div>
       </main>
       <div className="fixed bottom-0 left-0 right-0 bg-background border-t border-border px-6 py-2 pb-6 z-50">

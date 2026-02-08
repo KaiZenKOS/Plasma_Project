@@ -1,6 +1,9 @@
 import { useState } from "react";
-import { QRCodeSVG } from "react-qr-code";
 import { X, Copy, Check } from "lucide-react";
+
+// Import QRCode from react-qr-code
+// The package exports QRCode as default export
+import QRCodeComponent from "react-qr-code";
 
 type ShareQRCodeProps = {
   url: string;
@@ -44,7 +47,7 @@ export function ShareQRCode({ url, title, isOpen, onClose }: ShareQRCodeProps) {
 
         {/* QR Code */}
         <div className="flex justify-center mb-6 p-4 bg-white rounded-xl border-2 border-[#e5e7eb]">
-          <QRCodeSVG
+          <QRCodeComponent
             value={url}
             size={256}
             level="H"

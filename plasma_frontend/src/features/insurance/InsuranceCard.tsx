@@ -242,6 +242,9 @@ export function InsuranceCard() {
       await publicClient.waitForTransactionReceipt({ hash: purchaseHash });
       toast("Police d'assurance achetée avec succès!", "success");
 
+      // Trigger history refresh
+      window.dispatchEvent(new CustomEvent("transaction-confirmed", { detail: { txHash: purchaseHash } }));
+
       // Clear form and reload
       setTontineId("");
       await loadPolicies();

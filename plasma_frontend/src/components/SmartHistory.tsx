@@ -528,6 +528,40 @@ export function SmartHistory() {
     loadHistory();
   }, [loadHistory, refreshKey]);
 
+  // Auto-refresh every 15 seconds to catch new transactions
+  useEffect(() => {
+    if (!walletAddress) return;
+    
+    const interval = setInterval(() => {
+      console.log("[SmartHistory] Auto-refresh triggered");
+      setRefreshKey((prev) => prev + 1);
+    }, 15000); // Refresh every 15 seconds
+
+    return () => clearInterval(interval);
+  }, [walletAddress]);
+
+  // Listen for custom events to trigger refresh (e.g., after transaction completion)
+  useEffect(() => {
+    if (!walletAddress) return;
+
+    const handleTransactionComplete = () => {
+      console.log("[SmartHistory] Transaction complete event received, refreshing...");
+      // Wait a bit for the transaction to be included in a block
+      setTimeout(() => {
+        setRefreshKey((prev) => prev + 1);
+      }, 3000);
+    };
+
+    // Listen for custom events from transaction components
+    window.addEventListener("transaction-complete", handleTransactionComplete);
+    window.addEventListener("transaction-confirmed", handleTransactionComplete);
+
+    return () => {
+      window.removeEventListener("transaction-complete", handleTransactionComplete);
+      window.removeEventListener("transaction-confirmed", handleTransactionComplete);
+    };
+  }, [walletAddress]);
+
   const handleRefresh = useCallback(() => {
     console.log("[SmartHistory] Manual refresh triggered");
     setRefreshKey((prev) => prev + 1);

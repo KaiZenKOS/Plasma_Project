@@ -44,6 +44,7 @@ export default defineConfig({
       "react-router",
       "react-router-dom",
       "@privy-io/react-auth",
+      "react-qr-code",
     ],
     esbuildOptions: {
       // Ensure React is treated as external correctly

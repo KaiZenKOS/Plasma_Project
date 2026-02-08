@@ -35,6 +35,9 @@ async function request<T>(
       e instanceof TypeError ||
       /connection refused|network error|load failed/i.test(String(e));
     if (isConnectionError) {
+      // Return a graceful error instead of throwing to prevent app crash
+      // The app should work even if backend is unavailable
+      console.warn("[API] Backend unreachable. App will continue without backend features.");
       throw new Error(
         "Backend unreachable. Start it with: cd plasma_backend && npm run dev",
       );

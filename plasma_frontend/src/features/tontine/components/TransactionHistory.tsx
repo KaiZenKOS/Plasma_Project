@@ -1,88 +1,28 @@
 import { useCallback, useEffect, useState } from "react";
-import { formatUnits } from "viem";
-import { Plus, UserPlus, DollarSign, ArrowUpRight, Download, RefreshCw } from "lucide-react";
+import { formatUnits, decodeEventLog } from "viem";
+import { Plus, UserPlus, DollarSign, ArrowUpRight, Download, RefreshCw, Shield, ShieldCheck } from "lucide-react";
 import { useUser } from "../../../context/UserContext";
 import { TONTINE_CONTRACT_ADDRESS, USDT_DECIMALS } from "../config";
 import { publicClient } from "../../../blockchain/viem";
 import { TONTINE_ABI } from "../abi";
+import { ESCROW_SERVICE_ADDRESS, ESCROW_SERVICE_ABI } from "../../../blockchain/escrowService";
+import { INSURANCE_CONTRACT_ADDRESS, INSURANCE_SERVICE_ABI } from "../../../blockchain/insuranceService";
 
-// Event types from the contract
-type TontineCreatedEvent = {
-  eventName: "TontineCreated";
-  args: {
-    tontineId: bigint;
-    contributionAmount: bigint;
-    frequencySeconds: bigint;
-    collateralAmount: bigint;
-  };
-  transactionHash: `0x${string}`;
-  blockNumber: bigint;
-  blockTimestamp?: number;
-};
-
-type MemberJoinedEvent = {
-  eventName: "MemberJoined";
-  args: {
-    tontineId: bigint;
-    member: `0x${string}`;
-    turnPosition: bigint;
-  };
-  transactionHash: `0x${string}`;
-  blockNumber: bigint;
-  blockTimestamp?: number;
-};
-
-type ContributionPaidEvent = {
-  eventName: "ContributionPaid";
-  args: {
-    tontineId: bigint;
-    member: `0x${string}`;
-    amount: bigint;
-    turnIndex: bigint;
-  };
-  transactionHash: `0x${string}`;
-  blockNumber: bigint;
-  blockTimestamp?: number;
-};
-
-type PayoutSentEvent = {
-  eventName: "PayoutSent";
-  args: {
-    tontineId: bigint;
-    beneficiary: `0x${string}`;
-    amount: bigint;
-  };
-  transactionHash: `0x${string}`;
-  blockNumber: bigint;
-  blockTimestamp?: number;
-};
-
-type WithdrawalEvent = {
-  eventName: "Withdrawal";
-  args: {
-    user: `0x${string}`;
-    amount: bigint;
-  };
-  transactionHash: `0x${string}`;
-  blockNumber: bigint;
-  blockTimestamp?: number;
-};
-
-type TransactionEvent = TontineCreatedEvent | MemberJoinedEvent | ContributionPaidEvent | PayoutSentEvent | WithdrawalEvent;
-
-// Processed transaction for display
-type TransactionItem = {
+// Unified history item interface
+type HistoryItem = {
   id: string;
-  type: "Create" | "Join" | "Deposit" | "Payout" | "Withdrawal";
+  type: "Creation" | "Payment/Join" | "Payout" | "Escrow" | "Insurance" | "Withdrawal";
   icon: React.ReactNode;
   label: string;
   amount: string | null;
   tontineId: number | null;
+  escrowId: number | null;
   address: string | null;
   blockNumber: number;
   timestamp: number | null;
   txHash: `0x${string}`;
   explorerUrl: string;
+  contractType: "Tontine" | "Escrow" | "Insurance";
 };
 
 const EXPLORER_URL =
@@ -107,330 +47,365 @@ function formatDate(timestamp: number | null, blockNumber: number): string {
   return `Block #${blockNumber}`;
 }
 
-// Process event into display item
-function processEvent(event: TransactionEvent, userAddress: string): TransactionItem | null {
-  const txHash = event.transactionHash;
-  const blockNumber = Number(event.blockNumber);
-  const timestamp = event.blockTimestamp || null;
+// Cache for block timestamps to avoid redundant requests
+const blockTimestampCache = new Map<number, number>();
 
-  switch (event.eventName) {
-    case "TontineCreated": {
-      // Check if user is the creator (we need to check the transaction from address)
-      // For now, we'll show all created tontines
-      return {
-        id: `${txHash}-${event.args.tontineId}`,
-        type: "Create",
-        icon: <Plus className="size-5 text-[#10b981]" />,
-        label: `Created Tontine #${Number(event.args.tontineId)}`,
-        amount: formatUnits(event.args.contributionAmount, USDT_DECIMALS),
-        tontineId: Number(event.args.tontineId),
-        address: null,
-        blockNumber,
-        timestamp,
-        txHash,
-        explorerUrl: `${EXPLORER_URL}/tx/${txHash}`,
-      };
-    }
-
-    case "MemberJoined": {
-      // Only show if user is the member
-      if (event.args.member.toLowerCase() !== userAddress.toLowerCase()) {
-        return null;
-      }
-      return {
-        id: `${txHash}-${event.args.tontineId}-join`,
-        type: "Join",
-        icon: <UserPlus className="size-5 text-[#3b82f6]" />,
-        label: `Joined Tontine #${Number(event.args.tontineId)}`,
-        amount: null,
-        tontineId: Number(event.args.tontineId),
-        address: event.args.member,
-        blockNumber,
-        timestamp,
-        txHash,
-        explorerUrl: `${EXPLORER_URL}/tx/${txHash}`,
-      };
-    }
-
-    case "ContributionPaid": {
-      // Only show if user is the member
-      if (event.args.member.toLowerCase() !== userAddress.toLowerCase()) {
-        return null;
-      }
-      return {
-        id: `${txHash}-${event.args.tontineId}-contribution`,
-        type: "Deposit",
-        icon: <DollarSign className="size-5 text-[#f59e0b]" />,
-        label: `Paid contribution to Tontine #${Number(event.args.tontineId)}`,
-        amount: formatUnits(event.args.amount, USDT_DECIMALS),
-        tontineId: Number(event.args.tontineId),
-        address: event.args.member,
-        blockNumber,
-        timestamp,
-        txHash,
-        explorerUrl: `${EXPLORER_URL}/tx/${txHash}`,
-      };
-    }
-
-    case "PayoutSent": {
-      // Only show if user is the beneficiary
-      if (event.args.beneficiary.toLowerCase() !== userAddress.toLowerCase()) {
-        return null;
-      }
-      return {
-        id: `${txHash}-${event.args.tontineId}-payout`,
-        type: "Payout",
-        icon: <ArrowUpRight className="size-5 text-[#10b981]" />,
-        label: `Received payout from Tontine #${Number(event.args.tontineId)}`,
-        amount: formatUnits(event.args.amount, USDT_DECIMALS),
-        tontineId: Number(event.args.tontineId),
-        address: event.args.beneficiary,
-        blockNumber,
-        timestamp,
-        txHash,
-        explorerUrl: `${EXPLORER_URL}/tx/${txHash}`,
-      };
-    }
-
-    case "Withdrawal": {
-      // Only show if user is the one withdrawing
-      if (event.args.user.toLowerCase() !== userAddress.toLowerCase()) {
-        return null;
-      }
-      return {
-        id: `${txHash}-withdrawal`,
-        type: "Withdrawal",
-        icon: <Download className="size-5 text-[#8b5cf6]" />,
-        label: "Withdrew funds",
-        amount: formatUnits(event.args.amount, USDT_DECIMALS),
-        tontineId: null,
-        address: event.args.user,
-        blockNumber,
-        timestamp,
-        txHash,
-        explorerUrl: `${EXPLORER_URL}/tx/${txHash}`,
-      };
-    }
-
-    default:
-      return null;
+async function getBlockTimestamp(blockNumber: bigint): Promise<number | null> {
+  const num = Number(blockNumber);
+  if (blockTimestampCache.has(num)) {
+    return blockTimestampCache.get(num)!;
+  }
+  try {
+    const block = await publicClient.getBlock({ blockNumber });
+    const timestamp = Number(block.timestamp);
+    blockTimestampCache.set(num, timestamp);
+    return timestamp;
+  } catch (err) {
+    console.warn(`[TransactionHistory] Failed to get timestamp for block ${num}:`, err);
+    return null;
   }
 }
 
-// Fetch events from blockchain
-async function fetchTransactionEvents(userAddress: string): Promise<TransactionItem[]> {
-  if (!TONTINE_CONTRACT_ADDRESS || !userAddress) {
+// Fetch all transaction events from multiple contracts
+async function fetchAllTransactionEvents(userAddress: string): Promise<HistoryItem[]> {
+  if (!userAddress) {
     return [];
   }
 
-  try {
-    console.log("[TransactionHistory] Fetching events for address:", userAddress);
+  const allItems: HistoryItem[] = [];
+  const currentBlock = await publicClient.getBlockNumber();
 
-    // Get current block number to limit search range
-    const currentBlock = await publicClient.getBlockNumber();
-    console.log("[TransactionHistory] Current block:", Number(currentBlock));
+  // Fetch events in parallel from all contracts
+  const eventPromises: Promise<HistoryItem[]>[] = [];
 
-    // Find event definitions from ABI
-    const tontineCreatedEvent = TONTINE_ABI.find((item) => item.type === "event" && item.name === "TontineCreated");
-    const memberJoinedEvent = TONTINE_ABI.find((item) => item.type === "event" && item.name === "MemberJoined");
-    const contributionPaidEvent = TONTINE_ABI.find((item) => item.type === "event" && item.name === "ContributionPaid");
-    const payoutSentEvent = TONTINE_ABI.find((item) => item.type === "event" && item.name === "PayoutSent");
-    const withdrawalEvent = TONTINE_ABI.find((item) => item.type === "event" && item.name === "Withdrawal");
+  // 1. Tontine Contract Events
+  if (TONTINE_CONTRACT_ADDRESS) {
+    const tontineEvents = [
+      // TontineCreated - need to check transaction from address
+      publicClient
+        .getLogs({
+          address: TONTINE_CONTRACT_ADDRESS,
+          event: TONTINE_ABI.find((item) => item.type === "event" && item.name === "TontineCreated") as any,
+          fromBlock: 0n,
+          toBlock: currentBlock,
+        })
+        .then(async (logs) => {
+          const items: HistoryItem[] = [];
+          for (const log of logs) {
+            try {
+              const tx = await publicClient.getTransaction({ hash: log.transactionHash });
+              if (tx.from.toLowerCase() === userAddress.toLowerCase()) {
+                const decoded = decodeEventLog({
+                  abi: TONTINE_ABI,
+                  data: log.data,
+                  topics: log.topics,
+                });
+                const timestamp = await getBlockTimestamp(log.blockNumber);
+                items.push({
+                  id: `${log.transactionHash}-${decoded.args.tontineId}`,
+                  type: "Creation",
+                  icon: <Plus className="size-5 text-[#10b981]" />,
+                  label: `Created Tontine #${Number(decoded.args.tontineId)}`,
+                  amount: formatUnits(decoded.args.contributionAmount as bigint, USDT_DECIMALS),
+                  tontineId: Number(decoded.args.tontineId),
+                  escrowId: null,
+                  address: null,
+                  blockNumber: Number(log.blockNumber),
+                  timestamp,
+                  txHash: log.transactionHash,
+                  explorerUrl: `${EXPLORER_URL}/tx/${log.transactionHash}`,
+                  contractType: "Tontine",
+                });
+              }
+            } catch (err) {
+              console.warn("[TransactionHistory] Error processing TontineCreated:", err);
+            }
+          }
+          return items;
+        })
+        .catch(() => []),
 
-    if (!tontineCreatedEvent || !memberJoinedEvent || !contributionPaidEvent || !payoutSentEvent || !withdrawalEvent) {
-      throw new Error("Event definitions not found in ABI");
-    }
+      // MemberJoined
+      publicClient
+        .getLogs({
+          address: TONTINE_CONTRACT_ADDRESS,
+          event: TONTINE_ABI.find((item) => item.type === "event" && item.name === "MemberJoined") as any,
+          args: { member: userAddress as `0x${string}` },
+          fromBlock: 0n,
+          toBlock: currentBlock,
+        })
+        .then(async (logs) => {
+          const items: HistoryItem[] = [];
+          for (const log of logs) {
+            try {
+              const decoded = decodeEventLog({
+                abi: TONTINE_ABI,
+                data: log.data,
+                topics: log.topics,
+              });
+              const timestamp = await getBlockTimestamp(log.blockNumber);
+              items.push({
+                id: `${log.transactionHash}-${decoded.args.tontineId}-join`,
+                type: "Payment/Join",
+                icon: <UserPlus className="size-5 text-[#3b82f6]" />,
+                label: `Joined Tontine #${Number(decoded.args.tontineId)}`,
+                amount: null,
+                tontineId: Number(decoded.args.tontineId),
+                escrowId: null,
+                address: decoded.args.member as `0x${string}`,
+                blockNumber: Number(log.blockNumber),
+                timestamp,
+                txHash: log.transactionHash,
+                explorerUrl: `${EXPLORER_URL}/tx/${log.transactionHash}`,
+                contractType: "Tontine",
+              });
+            } catch (err) {
+              console.warn("[TransactionHistory] Error processing MemberJoined:", err);
+            }
+          }
+          return items;
+        })
+        .catch(() => []),
 
-    // Fetch all events in parallel
-    const eventPromises = [
-      // TontineCreated - we'll filter by transaction from address later
-      publicClient.getLogs({
-        address: TONTINE_CONTRACT_ADDRESS,
-        event: tontineCreatedEvent as any,
-        fromBlock: 0n,
-        toBlock: currentBlock,
-      }).catch((err) => {
-        console.warn("[TransactionHistory] Error fetching TontineCreated:", err);
-        return [];
-      }),
-      // MemberJoined - filter by member address
-      publicClient.getLogs({
-        address: TONTINE_CONTRACT_ADDRESS,
-        event: memberJoinedEvent as any,
-        args: {
-          member: userAddress as `0x${string}`,
-        },
-        fromBlock: 0n,
-        toBlock: currentBlock,
-      }).catch((err) => {
-        console.warn("[TransactionHistory] Error fetching MemberJoined:", err);
-        return [];
-      }),
-      // ContributionPaid - filter by member address
-      publicClient.getLogs({
-        address: TONTINE_CONTRACT_ADDRESS,
-        event: contributionPaidEvent as any,
-        args: {
-          member: userAddress as `0x${string}`,
-        },
-        fromBlock: 0n,
-        toBlock: currentBlock,
-      }).catch((err) => {
-        console.warn("[TransactionHistory] Error fetching ContributionPaid:", err);
-        return [];
-      }),
-      // PayoutSent - filter by beneficiary address
-      publicClient.getLogs({
-        address: TONTINE_CONTRACT_ADDRESS,
-        event: payoutSentEvent as any,
-        args: {
-          beneficiary: userAddress as `0x${string}`,
-        },
-        fromBlock: 0n,
-        toBlock: currentBlock,
-      }).catch((err) => {
-        console.warn("[TransactionHistory] Error fetching PayoutSent:", err);
-        return [];
-      }),
-      // Withdrawal - filter by user address
-      publicClient.getLogs({
-        address: TONTINE_CONTRACT_ADDRESS,
-        event: withdrawalEvent as any,
-        args: {
-          user: userAddress as `0x${string}`,
-        },
-        fromBlock: 0n,
-        toBlock: currentBlock,
-      }).catch((err) => {
-        console.warn("[TransactionHistory] Error fetching Withdrawal:", err);
-        return [];
-      }),
+      // ContributionPaid
+      publicClient
+        .getLogs({
+          address: TONTINE_CONTRACT_ADDRESS,
+          event: TONTINE_ABI.find((item) => item.type === "event" && item.name === "ContributionPaid") as any,
+          args: { member: userAddress as `0x${string}` },
+          fromBlock: 0n,
+          toBlock: currentBlock,
+        })
+        .then(async (logs) => {
+          const items: HistoryItem[] = [];
+          for (const log of logs) {
+            try {
+              const decoded = decodeEventLog({
+                abi: TONTINE_ABI,
+                data: log.data,
+                topics: log.topics,
+              });
+              const timestamp = await getBlockTimestamp(log.blockNumber);
+              items.push({
+                id: `${log.transactionHash}-${decoded.args.tontineId}-contribution`,
+                type: "Payment/Join",
+                icon: <DollarSign className="size-5 text-[#f59e0b]" />,
+                label: `Paid contribution to Tontine #${Number(decoded.args.tontineId)}`,
+                amount: formatUnits(decoded.args.amount as bigint, USDT_DECIMALS),
+                tontineId: Number(decoded.args.tontineId),
+                escrowId: null,
+                address: decoded.args.member as `0x${string}`,
+                blockNumber: Number(log.blockNumber),
+                timestamp,
+                txHash: log.transactionHash,
+                explorerUrl: `${EXPLORER_URL}/tx/${log.transactionHash}`,
+                contractType: "Tontine",
+              });
+            } catch (err) {
+              console.warn("[TransactionHistory] Error processing ContributionPaid:", err);
+            }
+          }
+          return items;
+        })
+        .catch(() => []),
+
+      // PayoutSent
+      publicClient
+        .getLogs({
+          address: TONTINE_CONTRACT_ADDRESS,
+          event: TONTINE_ABI.find((item) => item.type === "event" && item.name === "PayoutSent") as any,
+          args: { beneficiary: userAddress as `0x${string}` },
+          fromBlock: 0n,
+          toBlock: currentBlock,
+        })
+        .then(async (logs) => {
+          const items: HistoryItem[] = [];
+          for (const log of logs) {
+            try {
+              const decoded = decodeEventLog({
+                abi: TONTINE_ABI,
+                data: log.data,
+                topics: log.topics,
+              });
+              const timestamp = await getBlockTimestamp(log.blockNumber);
+              items.push({
+                id: `${log.transactionHash}-${decoded.args.tontineId}-payout`,
+                type: "Payout",
+                icon: <ArrowUpRight className="size-5 text-[#10b981]" />,
+                label: `Received payout from Tontine #${Number(decoded.args.tontineId)}`,
+                amount: formatUnits(decoded.args.amount as bigint, USDT_DECIMALS),
+                tontineId: Number(decoded.args.tontineId),
+                escrowId: null,
+                address: decoded.args.beneficiary as `0x${string}`,
+                blockNumber: Number(log.blockNumber),
+                timestamp,
+                txHash: log.transactionHash,
+                explorerUrl: `${EXPLORER_URL}/tx/${log.transactionHash}`,
+                contractType: "Tontine",
+              });
+            } catch (err) {
+              console.warn("[TransactionHistory] Error processing PayoutSent:", err);
+            }
+          }
+          return items;
+        })
+        .catch(() => []),
+
+      // Withdrawal
+      publicClient
+        .getLogs({
+          address: TONTINE_CONTRACT_ADDRESS,
+          event: TONTINE_ABI.find((item) => item.type === "event" && item.name === "Withdrawal") as any,
+          args: { user: userAddress as `0x${string}` },
+          fromBlock: 0n,
+          toBlock: currentBlock,
+        })
+        .then(async (logs) => {
+          const items: HistoryItem[] = [];
+          for (const log of logs) {
+            try {
+              const decoded = decodeEventLog({
+                abi: TONTINE_ABI,
+                data: log.data,
+                topics: log.topics,
+              });
+              const timestamp = await getBlockTimestamp(log.blockNumber);
+              items.push({
+                id: `${log.transactionHash}-withdrawal`,
+                type: "Withdrawal",
+                icon: <Download className="size-5 text-[#8b5cf6]" />,
+                label: "Withdrew funds",
+                amount: formatUnits(decoded.args.amount as bigint, USDT_DECIMALS),
+                tontineId: null,
+                escrowId: null,
+                address: decoded.args.user as `0x${string}`,
+                blockNumber: Number(log.blockNumber),
+                timestamp,
+                txHash: log.transactionHash,
+                explorerUrl: `${EXPLORER_URL}/tx/${log.transactionHash}`,
+                contractType: "Tontine",
+              });
+            } catch (err) {
+              console.warn("[TransactionHistory] Error processing Withdrawal:", err);
+            }
+          }
+          return items;
+        })
+        .catch(() => []),
     ];
 
-    const [createdLogs, joinedLogs, contributionLogs, payoutLogs, withdrawalLogs] = await Promise.all(eventPromises);
-    
-    // For TontineCreated, we need to check the transaction from address
-    const createdEvents: TransactionItem[] = [];
-    for (const log of createdLogs) {
-      try {
-        const tx = await publicClient.getTransaction({ hash: log.transactionHash });
-        if (tx.from.toLowerCase() === userAddress.toLowerCase()) {
-          const decoded = publicClient.decodeEventLog({
-            abi: TONTINE_ABI,
-            data: log.data,
-            topics: log.topics,
-          });
-          
-          let blockTimestamp: number | undefined;
-          try {
-            const block = await publicClient.getBlock({ blockNumber: log.blockNumber });
-            blockTimestamp = Number(block.timestamp);
-          } catch {}
-
-          const event: TontineCreatedEvent = {
-            eventName: "TontineCreated",
-            args: decoded.args as TontineCreatedEvent["args"],
-            transactionHash: log.transactionHash,
-            blockNumber: log.blockNumber,
-            blockTimestamp,
-          };
-
-          const processed = processEvent(event, userAddress);
-          if (processed) {
-            createdEvents.push(processed);
-          }
-        }
-      } catch (err) {
-        console.warn("[TransactionHistory] Error processing TontineCreated log:", err);
-      }
-    }
-
-    // Process other events
-    const allLogs = [...joinedLogs, ...contributionLogs, ...payoutLogs, ...withdrawalLogs];
-    console.log(`[TransactionHistory] Found ${allLogs.length} raw logs (excluding TontineCreated)`);
-
-    const processedEvents: TransactionItem[] = [...createdEvents];
-
-    for (const log of allLogs) {
-      try {
-        // Decode the log
-        const decoded = publicClient.decodeEventLog({
-          abi: TONTINE_ABI,
-          data: log.data,
-          topics: log.topics,
-        });
-
-        // Get block timestamp if available
-        let blockTimestamp: number | undefined;
-        try {
-          const block = await publicClient.getBlock({ blockNumber: log.blockNumber });
-          blockTimestamp = Number(block.timestamp);
-        } catch {
-          // Ignore if we can't get timestamp
-        }
-
-        // Create event object based on event name
-        let event: TransactionEvent | null = null;
-
-        if (decoded.eventName === "MemberJoined") {
-          event = {
-            eventName: "MemberJoined",
-            args: decoded.args as MemberJoinedEvent["args"],
-            transactionHash: log.transactionHash,
-            blockNumber: log.blockNumber,
-            blockTimestamp,
-          };
-        } else if (decoded.eventName === "ContributionPaid") {
-          event = {
-            eventName: "ContributionPaid",
-            args: decoded.args as ContributionPaidEvent["args"],
-            transactionHash: log.transactionHash,
-            blockNumber: log.blockNumber,
-            blockTimestamp,
-          };
-        } else if (decoded.eventName === "PayoutSent") {
-          event = {
-            eventName: "PayoutSent",
-            args: decoded.args as PayoutSentEvent["args"],
-            transactionHash: log.transactionHash,
-            blockNumber: log.blockNumber,
-            blockTimestamp,
-          };
-        } else if (decoded.eventName === "Withdrawal") {
-          event = {
-            eventName: "Withdrawal",
-            args: decoded.args as WithdrawalEvent["args"],
-            transactionHash: log.transactionHash,
-            blockNumber: log.blockNumber,
-            blockTimestamp,
-          };
-        }
-
-        if (event) {
-          const processed = processEvent(event, userAddress);
-          if (processed) {
-            processedEvents.push(processed);
-          }
-        }
-      } catch (err) {
-        console.warn("[TransactionHistory] Error decoding log:", err, log);
-      }
-    }
-
-    // Sort by block number (newest first)
-    processedEvents.sort((a, b) => b.blockNumber - a.blockNumber);
-
-    console.log(`[TransactionHistory] Processed ${processedEvents.length} events`);
-    return processedEvents;
-  } catch (err) {
-    console.error("[TransactionHistory] Error fetching events:", err);
-    throw err;
+    eventPromises.push(...tontineEvents);
   }
+
+  // 2. Escrow Contract Events
+  if (ESCROW_SERVICE_ADDRESS) {
+    const escrowEvents = [
+      // EscrowCreated - filter by depositor
+      publicClient
+        .getLogs({
+          address: ESCROW_SERVICE_ADDRESS,
+          event: ESCROW_SERVICE_ABI.find((item) => item.type === "event" && item.name === "EscrowCreated") as any,
+          args: { depositor: userAddress as `0x${string}` },
+          fromBlock: 0n,
+          toBlock: currentBlock,
+        })
+        .then(async (logs) => {
+          const items: HistoryItem[] = [];
+          for (const log of logs) {
+            try {
+              const decoded = decodeEventLog({
+                abi: ESCROW_SERVICE_ABI,
+                data: log.data,
+                topics: log.topics,
+              });
+              const timestamp = await getBlockTimestamp(log.blockNumber);
+              items.push({
+                id: `${log.transactionHash}-escrow-${decoded.args.escrowId}`,
+                type: "Escrow",
+                icon: <Shield className="size-5 text-[#3b82f6]" />,
+                label: `Created Escrow #${Number(decoded.args.escrowId)}`,
+                amount: formatUnits(decoded.args.amount as bigint, USDT_DECIMALS),
+                tontineId: null,
+                escrowId: Number(decoded.args.escrowId),
+                address: decoded.args.beneficiary as `0x${string}`,
+                blockNumber: Number(log.blockNumber),
+                timestamp,
+                txHash: log.transactionHash,
+                explorerUrl: `${EXPLORER_URL}/tx/${log.transactionHash}`,
+                contractType: "Escrow",
+              });
+            } catch (err) {
+              console.warn("[TransactionHistory] Error processing EscrowCreated:", err);
+            }
+          }
+          return items;
+        })
+        .catch(() => []),
+
+      // EscrowReleased - filter by beneficiary
+      publicClient
+        .getLogs({
+          address: ESCROW_SERVICE_ADDRESS,
+          event: ESCROW_SERVICE_ABI.find((item) => item.type === "event" && item.name === "EscrowReleased") as any,
+          args: { beneficiary: userAddress as `0x${string}` },
+          fromBlock: 0n,
+          toBlock: currentBlock,
+        })
+        .then(async (logs) => {
+          const items: HistoryItem[] = [];
+          for (const log of logs) {
+            try {
+              const decoded = decodeEventLog({
+                abi: ESCROW_SERVICE_ABI,
+                data: log.data,
+                topics: log.topics,
+              });
+              const timestamp = await getBlockTimestamp(log.blockNumber);
+              items.push({
+                id: `${log.transactionHash}-escrow-release-${decoded.args.escrowId}`,
+                type: "Escrow",
+                icon: <ShieldCheck className="size-5 text-[#10b981]" />,
+                label: `Received Escrow #${Number(decoded.args.escrowId)}`,
+                amount: formatUnits(decoded.args.amount as bigint, USDT_DECIMALS),
+                tontineId: null,
+                escrowId: Number(decoded.args.escrowId),
+                address: decoded.args.beneficiary as `0x${string}`,
+                blockNumber: Number(log.blockNumber),
+                timestamp,
+                txHash: log.transactionHash,
+                explorerUrl: `${EXPLORER_URL}/tx/${log.transactionHash}`,
+                contractType: "Escrow",
+              });
+            } catch (err) {
+              console.warn("[TransactionHistory] Error processing EscrowReleased:", err);
+            }
+          }
+          return items;
+        })
+        .catch(() => []),
+    ];
+
+    eventPromises.push(...escrowEvents);
+  }
+
+  // 3. Insurance Contract Events (if available)
+  // Note: Insurance contract may not have events, so we'll skip for now
+  // If events are added later, they can be included here
+
+  // Execute all event fetches in parallel
+  const results = await Promise.all(eventPromises);
+  const allItems = results.flat();
+
+  // Sort by block number (newest first)
+  allItems.sort((a, b) => b.blockNumber - a.blockNumber);
+
+  console.log(`[TransactionHistory] Fetched ${allItems.length} transactions from blockchain`);
+  return allItems;
 }
 
 export function TransactionHistory() {
   const { walletAddress } = useUser();
-  const [transactions, setTransactions] = useState<TransactionItem[]>([]);
+  const [transactions, setTransactions] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -442,17 +417,11 @@ export function TransactionHistory() {
       return;
     }
 
-    if (!TONTINE_CONTRACT_ADDRESS) {
-      setError("Tontine contract address not configured");
-      setLoading(false);
-      return;
-    }
-
     setLoading(true);
     setError(null);
 
     try {
-      const events = await fetchTransactionEvents(walletAddress);
+      const events = await fetchAllTransactionEvents(walletAddress);
       setTransactions(events);
       console.log(`[TransactionHistory] Loaded ${events.length} transactions`);
     } catch (err) {
@@ -471,6 +440,8 @@ export function TransactionHistory() {
 
   const handleRefresh = useCallback(() => {
     console.log("[TransactionHistory] Manual refresh triggered");
+    // Clear timestamp cache on refresh
+    blockTimestampCache.clear();
     setRefreshKey((prev) => prev + 1);
   }, []);
 
@@ -543,8 +514,8 @@ export function TransactionHistory() {
           </button>
         </div>
         <div className="rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-12 text-center text-[#4a4a4a]">
-          <p className="font-medium">No blockchain activity found yet</p>
-          <p className="text-sm mt-1">Your transactions will appear here once you interact with tontines</p>
+          <p className="font-medium">No transactions found on Plasma Testnet yet</p>
+          <p className="text-sm mt-1">Your transactions will appear here once you interact with tontines, escrows, or other services</p>
         </div>
       </div>
     );
@@ -587,13 +558,24 @@ export function TransactionHistory() {
 
               {/* Details */}
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-[#111827] truncate">{tx.label}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-[#111827] truncate">{tx.label}</p>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-[#f3f4f6] text-[#6b7280] shrink-0">
+                    {tx.contractType}
+                  </span>
+                </div>
                 <div className="flex items-center gap-3 mt-1">
                   <p className="text-xs text-[#6b7280]">{formatDate(tx.timestamp, tx.blockNumber)}</p>
                   {tx.tontineId !== null && (
                     <>
                       <span className="text-xs text-[#9ca3af]">•</span>
                       <p className="text-xs text-[#6b7280]">Tontine #{tx.tontineId}</p>
+                    </>
+                  )}
+                  {tx.escrowId !== null && (
+                    <>
+                      <span className="text-xs text-[#9ca3af]">•</span>
+                      <p className="text-xs text-[#6b7280]">Escrow #{tx.escrowId}</p>
                     </>
                   )}
                 </div>
@@ -603,7 +585,8 @@ export function TransactionHistory() {
               {tx.amount && (
                 <div className="text-right shrink-0 ml-4">
                   <p className="text-sm font-semibold text-[#10b981]">
-                    +{parseFloat(tx.amount).toFixed(2)} USDT
+                    {tx.type === "Payout" || tx.type === "Escrow" || tx.type === "Withdrawal" ? "+" : ""}
+                    {parseFloat(tx.amount).toFixed(2)} USDT
                   </p>
                 </div>
               )}
@@ -617,4 +600,3 @@ export function TransactionHistory() {
     </div>
   );
 }
-

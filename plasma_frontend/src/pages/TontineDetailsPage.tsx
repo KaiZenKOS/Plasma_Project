@@ -265,6 +265,8 @@ export function TontineDetailsPage() {
       const result = await joinTontine(BigInt(id));
       if (result?.hash) {
         toast(`Transaction sent! Hash: ${result.hash.slice(0, 10)}...`, "success");
+        // Trigger history refresh
+        window.dispatchEvent(new CustomEvent("transaction-confirmed", { detail: { txHash: result.hash } }));
         // Reload tontine data after a delay
         setTimeout(() => {
           window.location.reload();
@@ -294,6 +296,8 @@ export function TontineDetailsPage() {
       const result = await payContribution(BigInt(id));
       if (result?.hash) {
         toast(`Transaction sent! Hash: ${result.hash.slice(0, 10)}...`, "success");
+        // Trigger history refresh
+        window.dispatchEvent(new CustomEvent("transaction-confirmed", { detail: { txHash: result.hash } }));
         // Reload tontine data after a delay
         setTimeout(() => {
           window.location.reload();
@@ -323,6 +327,8 @@ export function TontineDetailsPage() {
       const result = await withdraw();
       if (result?.hash) {
         toast(`Transaction sent! Hash: ${result.hash.slice(0, 10)}...`, "success");
+        // Trigger history refresh
+        window.dispatchEvent(new CustomEvent("transaction-confirmed", { detail: { txHash: result.hash } }));
         // Reload tontine data after a delay
         setTimeout(() => {
           window.location.reload();

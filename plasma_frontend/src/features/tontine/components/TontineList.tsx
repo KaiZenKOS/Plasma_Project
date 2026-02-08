@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { formatUnits } from "viem";
-import { DollarSign, Users, Shuffle, RefreshCw } from "lucide-react";
+import { DollarSign, Users, Shuffle, RefreshCw, Share2 } from "lucide-react";
 import { useUser } from "../../../context/UserContext";
 import { TONTINE_CONTRACT_ADDRESS, USDT_DECIMALS } from "../config";
 import { publicClient } from "../../../blockchain/viem";
 import { TONTINE_ABI } from "../abi";
+import { ShareQRCode } from "../../../components/ShareQRCode";
 
 type TontineListProps = {
   onSelectTontine: (tontine: BlockchainTontine) => void;
@@ -252,12 +253,14 @@ function TontineCard({
   tontine, 
   onSelect,
   onJoin,
-  userAddress 
+  userAddress,
+  onShare
 }: { 
   tontine: BlockchainTontine; 
   onSelect: () => void;
   onJoin?: () => void;
   userAddress: string | null;
+  onShare?: () => void;
 }) {
   const randomMember = getRandomMember(tontine.members);
   const isUserMember = userAddress
@@ -285,6 +288,19 @@ function TontineCard({
           <p className="text-xs text-[#6b7280]">ID: {tontine.id}</p>
         </div>
         <div className="flex items-center gap-2">
+          {onShare && tontine.status === "Open" && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onShare();
+              }}
+              className="p-2 rounded-lg border border-[#295c4f] text-[#295c4f] hover:bg-[#295c4f] hover:text-white transition-colors"
+              title="Share / Invite"
+            >
+              <Share2 className="size-4" />
+            </button>
+          )}
           <span
             className={`text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5 ${
               tontine.status === "Running"
@@ -399,6 +415,7 @@ export function TontineList({ onSelectTontine }: TontineListProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [shareTontineId, setShareTontineId] = useState<number | null>(null);
 
   // Fetch all tontines from blockchain
   const loadTontines = useCallback(async () => {
@@ -555,6 +572,7 @@ export function TontineList({ onSelectTontine }: TontineListProps) {
             userAddress={walletAddress}
             onSelect={() => handleSelect(tontine)}
             onJoin={!tontine.members.some((m) => m.toLowerCase() === walletAddress?.toLowerCase()) && tontine.status === "Open" ? () => handleJoin(tontine) : undefined}
+            onShare={tontine.status === "Open" ? () => setShareTontineId(tontine.id) : undefined}
           />
         ))}
       </div>
@@ -583,6 +601,16 @@ export function TontineList({ onSelectTontine }: TontineListProps) {
           )}
         </pre>
       </div>
+
+      {/* Share QR Code Modal */}
+      {shareTontineId !== null && (
+        <ShareQRCode
+          url={`${window.location.origin}/tontine/join/${shareTontineId}`}
+          title={`Scan to Join Tontine #${shareTontineId}`}
+          isOpen={shareTontineId !== null}
+          onClose={() => setShareTontineId(null)}
+        />
+      )}
     </div>
   );
 }
