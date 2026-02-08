@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { formatUnits } from "viem";
 import { DollarSign, Users, Shuffle, RefreshCw } from "lucide-react";
 import { useUser } from "../../../context/UserContext";
@@ -393,6 +394,7 @@ function TontineCard({
 
 export function TontineList({ onSelectTontine }: TontineListProps) {
   const { walletAddress } = useUser();
+  const navigate = useNavigate();
   const [tontines, setTontines] = useState<BlockchainTontine[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -434,10 +436,24 @@ export function TontineList({ onSelectTontine }: TontineListProps) {
     setRefreshKey((prev) => prev + 1);
   }, []);
 
-  // Handle join action
+  // Handle select action - navigate to details page
+  const handleSelect = (tontine: BlockchainTontine) => {
+    if ("id" in tontine && tontine.id !== undefined) {
+      navigate(`/tontine/${tontine.id}`);
+    } else {
+      // Fallback to old callback if no ID
+      onSelectTontine(tontine);
+    }
+  };
+
+  // Handle join action - navigate to join page
   const handleJoin = (tontine: BlockchainTontine) => {
-    console.log("[TontineList] Join tontine:", tontine);
-    onSelectTontine(tontine);
+    if ("id" in tontine && tontine.id !== undefined) {
+      navigate(`/tontine/join/${tontine.id}`);
+    } else {
+      console.log("[TontineList] Join tontine:", tontine);
+      onSelectTontine(tontine);
+    }
   };
 
   // Loading state
@@ -537,7 +553,7 @@ export function TontineList({ onSelectTontine }: TontineListProps) {
             key={`tontine-${tontine.id}`}
             tontine={tontine}
             userAddress={walletAddress}
-            onSelect={() => onSelectTontine(tontine)}
+            onSelect={() => handleSelect(tontine)}
             onJoin={!tontine.members.some((m) => m.toLowerCase() === walletAddress?.toLowerCase()) && tontine.status === "Open" ? () => handleJoin(tontine) : undefined}
           />
         ))}

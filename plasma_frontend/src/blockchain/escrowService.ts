@@ -54,6 +54,25 @@ export const ESCROW_SERVICE_ABI = [
     stateMutability: "view",
     type: "function",
   },
+  {
+    type: "event",
+    name: "EscrowCreated",
+    inputs: [
+      { name: "escrowId", type: "uint256", indexed: true },
+      { name: "depositor", type: "address", indexed: true },
+      { name: "beneficiary", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "EscrowReleased",
+    inputs: [
+      { name: "escrowId", type: "uint256", indexed: true },
+      { name: "beneficiary", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
 ] as const;
 
 export const ERC20_ABI = [

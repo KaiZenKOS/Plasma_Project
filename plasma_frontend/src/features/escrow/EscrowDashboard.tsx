@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { formatUnits } from "viem";
+import { Share2 } from "lucide-react";
 import { useUser } from "../../context/UserContext";
 import { useWalletClient } from "../tontine/hooks/useWalletClient";
 import { useTontineToast } from "../tontine/context/ToastContext";
 import { publicClient } from "../../blockchain/viem";
+import { ShareQRCode } from "../../components/ShareQRCode";
 import {
   ESCROW_SERVICE_ADDRESS,
   ESCROW_USDT_ADDRESS,
@@ -67,6 +69,7 @@ export function EscrowDashboard() {
   const [submittingId, setSubmittingId] = useState<number | null>(null);
   const [releasingId, setReleasingId] = useState<number | null>(null);
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
+  const [shareEscrowId, setShareEscrowId] = useState<number | null>(null);
 
   // Form state for creating new escrow
   const [newBeneficiary, setNewBeneficiary] = useState("");
@@ -529,20 +532,41 @@ export function EscrowDashboard() {
                   )}
 
                   {canRelease && (
-                    <button
-                      type="button"
-                      onClick={() => handleReleaseFunds(engagement.id)}
-                      disabled={releasingId === engagement.id || !walletClient}
-                      className="px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-semibold disabled:opacity-50"
-                    >
-                      {releasingId === engagement.id ? "Libération…" : "Release Payment"}
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleReleaseFunds(engagement.id)}
+                        disabled={releasingId === engagement.id || !walletClient}
+                        className="px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-semibold disabled:opacity-50"
+                      >
+                        {releasingId === engagement.id ? "Libération…" : "Release Payment"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShareEscrowId(engagement.id)}
+                        className="px-4 py-2 rounded-xl border border-[#295c4f] text-[#295c4f] text-sm font-semibold hover:bg-[#295c4f] hover:text-white transition-colors flex items-center gap-2"
+                        title="Share Release Link"
+                      >
+                        <Share2 className="size-4" />
+                        Share
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
             );
           })}
         </div>
+      )}
+
+      {/* Share QR Code Modal */}
+      {shareEscrowId !== null && (
+        <ShareQRCode
+          url={`${window.location.origin}/escrow/release/${shareEscrowId}`}
+          title="Share Escrow Release Link"
+          isOpen={shareEscrowId !== null}
+          onClose={() => setShareEscrowId(null)}
+        />
       )}
     </div>
   );

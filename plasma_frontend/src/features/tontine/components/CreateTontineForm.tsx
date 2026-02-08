@@ -1,18 +1,26 @@
-import { useCallback, useState } from "react";
-import { createTontineGroupSimple } from "../../../api/tontine";
+import { useCallback, useState, useEffect } from "react";
 import { useUser } from "../../../context/UserContext";
 import { useTontineToast } from "../context/ToastContext";
 import { useWalletClient } from "../hooks/useWalletClient";
+import { useTontineWrite } from "../hooks/useTontineWrite";
+import { publicClient } from "../../../blockchain/viem";
+import { TONTINE_ABI } from "../abi";
+import { TONTINE_CONTRACT_ADDRESS } from "../config";
 
 const PERIOD_OPTIONS = [
   { label: "Hebdomadaire", value: "weekly" as const },
   { label: "Mensuel", value: "monthly" as const },
 ] as const;
 
+const EXPLORER_URL = typeof import.meta.env.VITE_PLASMA_EXPLORER_URL === "string" && import.meta.env.VITE_PLASMA_EXPLORER_URL
+  ? import.meta.env.VITE_PLASMA_EXPLORER_URL
+  : "https://testnet.plasmascan.to";
+
 export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
   const { toast } = useTontineToast();
   const { walletAddress } = useUser();
   const walletClient = useWalletClient();
+  const { createTontine, txState, txError, resetTx } = useTontineWrite(walletClient);
 
   const [name, setName] = useState("");
   const [period, setPeriod] = useState<"weekly" | "monthly">("weekly");
@@ -20,7 +28,8 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
   const [collateral, setCollateral] = useState("");
   const [memberInput, setMemberInput] = useState("");
   const [members, setMembers] = useState<string[]>([]);
-  const [submitting, setSubmitting] = useState(false);
+  const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
+  const [tontineId, setTontineId] = useState<number | null>(null);
 
   const contributionNum = Number(contribution) || 0;
   const collateralNum = Number(collateral) || 0;
@@ -30,6 +39,33 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
     const addr = walletClient?.account?.address;
     return addr ? addr.toLowerCase() : "";
   })();
+
+  // Wait for transaction receipt when hash is available
+  useEffect(() => {
+    if (!txHash || !TONTINE_CONTRACT_ADDRESS) return;
+    
+    const waitForReceipt = async () => {
+      try {
+        await publicClient.waitForTransactionReceipt({ hash: txHash });
+        // Read the latest tontine ID
+        const nextId = await publicClient.readContract({
+          address: TONTINE_CONTRACT_ADDRESS,
+          abi: TONTINE_ABI,
+          functionName: "nextTontineId",
+        });
+        const latestId = Number(nextId) - 1;
+        if (latestId >= 0) {
+          setTontineId(latestId);
+          toast("Tontine créée avec succès sur la blockchain!", "success");
+          onSuccess?.();
+        }
+      } catch (err) {
+        console.error("Error waiting for receipt:", err);
+      }
+    };
+    
+    waitForReceipt();
+  }, [txHash, toast, onSuccess]);
 
   const addMember = useCallback(() => {
     const addr = memberInput.trim().toLowerCase();
@@ -50,7 +86,7 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (!creatorWallet) {
+    if (!creatorWallet || !walletClient) {
       toast("Connectez votre wallet pour créer une tontine.", "error");
       return;
     }
@@ -58,25 +94,38 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
       toast("Indiquez un montant de cotisation > 0.", "error");
       return;
     }
-    setSubmitting(true);
+    if (!TONTINE_CONTRACT_ADDRESS) {
+      toast("Contrat Tontine non configuré.", "error");
+      return;
+    }
+
+    resetTx();
+    setTxHash(null);
+    setTontineId(null);
+
+    // Convert period to frequency in seconds
+    const frequencySeconds = period === "weekly" ? 7 * 24 * 60 * 60 : 30 * 24 * 60 * 60;
+
     try {
-      await createTontineGroupSimple({
-        name: name.trim() || "Ma Tontine",
-        period,
-        contribution_amount_usdt: contributionNum,
-        collateral_amount_usdt: collateralNum,
-        creator_wallet: creatorWallet,
-        members,
-      });
-      toast("Tontine créée. Elle apparaît dans la liste.", "success");
-      onSuccess?.();
+      const result = await createTontine(
+        contribution,
+        frequencySeconds,
+        collateral || "0"
+      );
+      
+      if (result?.hash) {
+        setTxHash(result.hash);
+        if (result.tontineId >= 0) {
+          setTontineId(result.tontineId);
+        }
+      } else {
+        toast(txError || "Erreur lors de la création", "error");
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toast(msg || "Erreur lors de la création", "error");
-    } finally {
-      setSubmitting(false);
     }
-  }, [creatorWallet, name, period, contributionNum, collateralNum, members, toast, onSuccess]);
+  }, [creatorWallet, walletClient, contribution, collateral, period, contributionNum, createTontine, txError, resetTx, toast]);
 
   return (
     <div className="rounded-2xl border border-[#e5e7eb] bg-[#FFFFFF] p-8" style={{ boxShadow: "none" }}>
@@ -183,14 +232,47 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={submitting || contributionNum <= 0 || !creatorWallet}
+          disabled={txState === "confirming" || txState === "success" || contributionNum <= 0 || !creatorWallet || !walletClient}
           className="w-full py-4 rounded-xl font-semibold text-white bg-[#295c4f] disabled:opacity-50"
         >
-          {submitting ? "Création…" : "Créer la tontine"}
+          {txState === "confirming" ? "Confirmez dans votre wallet…" : txState === "success" ? "Transaction envoyée" : "Créer la tontine"}
         </button>
+
+        {txState === "confirming" && (
+          <p className="text-sm text-[#295c4f] text-center">
+            ⏳ En attente de confirmation dans votre wallet…
+          </p>
+        )}
+
+        {txHash && (
+          <div className="rounded-xl border-2 border-[#295c4f] bg-[#295c4f]/5 p-4 space-y-2">
+            <p className="text-sm font-semibold text-[#295c4f]">Transaction envoyée!</p>
+            <a
+              href={`${EXPLORER_URL}/tx/${txHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-sm text-[#295c4f] hover:underline break-all"
+            >
+              Voir sur l'explorateur: {txHash.slice(0, 10)}…{txHash.slice(-8)}
+            </a>
+            {tontineId !== null && (
+              <p className="text-sm text-[#4a4a4a]">
+                Tontine ID: <strong>{tontineId}</strong>
+              </p>
+            )}
+          </div>
+        )}
+
+        {txError && (
+          <p className="text-sm text-[#ef4444] text-center">{txError}</p>
+        )}
 
         {!creatorWallet && (
           <p className="text-sm text-[#4a4a4a]">Connectez votre wallet pour créer une tontine.</p>
+        )}
+
+        {!walletClient && creatorWallet && (
+          <p className="text-sm text-[#4a4a4a]">Initialisation du wallet…</p>
         )}
       </div>
     </div>

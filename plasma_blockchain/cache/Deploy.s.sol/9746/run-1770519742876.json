@@ -1,0 +1,22 @@
+{
+  "transactions": [
+    {
+      "rpc": "https://testnet-rpc.plasma.to"
+    },
+    {
+      "rpc": "https://testnet-rpc.plasma.to"
+    },
+    {
+      "rpc": "https://testnet-rpc.plasma.to"
+    },
+    {
+      "rpc": "https://testnet-rpc.plasma.to"
+    },
+    {
+      "rpc": "https://testnet-rpc.plasma.to"
+    },
+    {
+      "rpc": "https://testnet-rpc.plasma.to"
+    }
+  ]
+}

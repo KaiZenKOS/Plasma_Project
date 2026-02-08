@@ -1,4 +1,4 @@
-import { Banknote, CircleDot, Lock, Unlock, Users } from "lucide-react";
+import { Banknote, CircleDot, Lock, Unlock, Users, Share2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { formatUnits } from "viem";
 import { getUserScore } from "../../../api/core";
@@ -9,6 +9,7 @@ import { useTontineToast } from "../context/ToastContext";
 import { useTontineChain } from "../hooks/useTontineChain";
 import { useTontineWrite } from "../hooks/useTontineWrite";
 import { useWalletClient } from "../hooks/useWalletClient";
+import { ShareQRCode } from "../../../components/ShareQRCode";
 
 const USDT_DECIMALS = 6;
 
@@ -36,6 +37,7 @@ export function TontineDashboard({ groupId, onBack }: TontineDashboardProps) {
   const [depositBalance, setDepositBalance] = useState<string | null>(null);
   const [signing, setSigning] = useState(false);
   const [executingTurn, setExecutingTurn] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const explorerUrl = typeof import.meta.env.VITE_PLASMA_EXPLORER_URL === "string" && import.meta.env.VITE_PLASMA_EXPLORER_URL
     ? import.meta.env.VITE_PLASMA_EXPLORER_URL
@@ -219,7 +221,17 @@ export function TontineDashboard({ groupId, onBack }: TontineDashboardProps) {
         <h1 className="text-lg font-bold text-[#295c4f]" style={{ fontFamily: "Outfit, DM Sans, sans-serif" }}>
           {detail.name ?? "Tontine"}
         </h1>
-        <div className="w-12" />
+        {contractId !== null && (
+          <button
+            type="button"
+            onClick={() => setShowShareModal(true)}
+            className="p-2 rounded-xl border border-[#295c4f] text-[#295c4f] hover:bg-[#295c4f] hover:text-white transition-colors"
+            title="Share / Invite"
+          >
+            <Share2 className="size-5" />
+          </button>
+        )}
+        {contractId === null && <div className="w-12" />}
       </header>
 
       <main className="flex-1 overflow-y-auto px-6 py-8 space-y-10">
@@ -487,6 +499,16 @@ export function TontineDashboard({ groupId, onBack }: TontineDashboardProps) {
           </div>
         </div>
       </main>
+
+      {/* Share QR Code Modal */}
+      {contractId !== null && (
+        <ShareQRCode
+          url={`${window.location.origin}/tontine/join/${contractId}`}
+          title={`Share ${detail.name ?? "Tontine"}`}
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
     </div>
   );
 }
