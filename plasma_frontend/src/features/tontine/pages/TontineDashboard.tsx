@@ -1,9 +1,9 @@
-import { Banknote, CircleDot, Users } from "lucide-react";
+import { Banknote, CircleDot, Lock, Unlock, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { formatUnits } from "viem";
 import { getUserScore } from "../../../api/core";
-import { getTontineGroup } from "../../../api/tontine";
-import type { TontineGroupDetail } from "../../../api/types";
+import { getTontineGroup, getEscrowTransactions, signTontineGroup, executeTontineTurn, getTontinePayouts, getTontineDepositBalance } from "../../../api/tontine";
+import type { TontineGroupDetail, EscrowTransaction } from "../../../api/types";
 import { useUser } from "../../../context/UserContext";
 import { useTontineToast } from "../context/ToastContext";
 import { useTontineChain } from "../hooks/useTontineChain";
@@ -30,7 +30,23 @@ export function TontineDashboard({ groupId, onBack }: TontineDashboardProps) {
     tontineId: contractId,
     userAddress: walletAddress,
   });
-  const { payContribution, withdraw, txState, txError, resetTx } = useTontineWrite(walletClient);
+  const { payContribution, withdraw, releaseFunds, txState, txError, resetTx } = useTontineWrite(walletClient);
+  const [escrowList, setEscrowList] = useState<EscrowTransaction[]>([]);
+  const [payouts, setPayouts] = useState<Array<{ id: string; tx_hash: string; block_number: number | null; to_address: string; amount: string; created_at: string }>>([]);
+  const [depositBalance, setDepositBalance] = useState<string | null>(null);
+  const [signing, setSigning] = useState(false);
+  const [executingTurn, setExecutingTurn] = useState(false);
+
+  const explorerUrl = typeof import.meta.env.VITE_PLASMA_EXPLORER_URL === "string" && import.meta.env.VITE_PLASMA_EXPLORER_URL
+    ? import.meta.env.VITE_PLASMA_EXPLORER_URL
+    : "https://testnet.plasmascan.to";
+
+  const isSimpleTontine = contractId == null;
+  const creatorWallet = detail?.members?.find((m) => m.turn_position === 0)?.wallet_address ?? "";
+  const isCreator = creatorWallet?.toLowerCase() === walletAddress?.toLowerCase();
+  const currentTurnIndex = detail?.current_turn_index ?? 0;
+  const simpleMembers = detail?.members?.map((m) => m.wallet_address) ?? [];
+  const simpleCurrentBeneficiary = simpleMembers[currentTurnIndex] ?? null;
 
   const loadDetail = useCallback(async () => {
     setLoadingDetail(true);
@@ -49,6 +65,27 @@ export function TontineDashboard({ groupId, onBack }: TontineDashboardProps) {
   }, [loadDetail]);
 
   useEffect(() => {
+    if (!groupId || !isSimpleTontine) return;
+    getTontinePayouts(groupId)
+      .then(setPayouts)
+      .catch(() => setPayouts([]));
+  }, [groupId, isSimpleTontine, detail?.current_turn_index]);
+
+  useEffect(() => {
+    if (!groupId || !detail?.deposit_wallet_address) return;
+    getTontineDepositBalance(groupId)
+      .then((r) => setDepositBalance(r.balanceFormatted))
+      .catch(() => setDepositBalance("0"));
+  }, [groupId, detail?.deposit_wallet_address, detail?.current_turn_index]);
+
+  useEffect(() => {
+    if (!walletAddress) return;
+    getEscrowTransactions(walletAddress)
+      .then(setEscrowList)
+      .catch(() => setEscrowList([]));
+  }, [walletAddress]);
+
+  useEffect(() => {
     if (!walletAddress) return;
     getUserScore(walletAddress)
       .then((r) => setScore(r.score))
@@ -56,13 +93,45 @@ export function TontineDashboard({ groupId, onBack }: TontineDashboardProps) {
   }, [walletAddress]);
 
   const contributionAmount = chain.group?.contributionAmount ?? 0n;
-  const contributionFormatted = Number(formatUnits(contributionAmount, USDT_DECIMALS));
-  const isCurrentBeneficiary =
-    chain.currentBeneficiary?.toLowerCase() === walletAddress?.toLowerCase();
+  const contributionFormattedFromChain = Number(formatUnits(contributionAmount, USDT_DECIMALS));
+  const contributionFormatted = isSimpleTontine && detail?.contribution_amount != null
+    ? Number(detail.contribution_amount) / 10 ** USDT_DECIMALS
+    : contributionFormattedFromChain;
+  const members = isSimpleTontine && simpleMembers.length > 0
+    ? simpleMembers
+    : chain.members.length > 0
+      ? chain.members
+      : detail?.members?.map((m) => m.wallet_address) ?? [];
+  const currentBeneficiaryAddr = isSimpleTontine ? simpleCurrentBeneficiary : (chain.currentBeneficiary ?? null);
+  const isCurrentBeneficiary = currentBeneficiaryAddr?.toLowerCase() === walletAddress?.toLowerCase();
   const hasPendingWithdrawal =
     chain.pendingWithdrawal != null && Number(chain.pendingWithdrawal) > 0;
   const dueTimestamp = chain.group ? Number(chain.group.nextDueAt) * 1000 : 0;
   const isPaymentDue = chain.isMember && dueTimestamp > 0 && Date.now() >= dueTimestamp - 60 * 60 * 1000;
+
+  const lockedAsWinner = escrowList.filter(
+    (e) => e.status === "LOCKED" && e.winner_address.toLowerCase() === walletAddress?.toLowerCase(),
+  );
+  const lockedAsProvider = escrowList.filter(
+    (e) => e.status === "LOCKED" && e.beneficiary.toLowerCase() === walletAddress?.toLowerCase(),
+  );
+
+  const handleReleaseFunds = useCallback(
+    async (escrow: EscrowTransaction) => {
+      const escrowId = escrow.contract_id != null ? Number(escrow.contract_id) : NaN;
+      if (Number.isNaN(escrowId)) {
+        toast("Escrow has no on-chain id", "error");
+        return;
+      }
+      resetTx();
+      const result = await releaseFunds(escrowId);
+      if (result?.hash) {
+        toast("Funds released to provider", "success");
+        getEscrowTransactions(walletAddress!).then(setEscrowList);
+      } else if (txError) toast(txError, "error");
+    },
+    [releaseFunds, resetTx, txError, toast, walletAddress],
+  );
 
   const handlePay = useCallback(async () => {
     if (contractId == null) {
@@ -86,6 +155,36 @@ export function TontineDashboard({ groupId, onBack }: TontineDashboardProps) {
     } else if (txError) toast(txError, "error");
   }, [withdraw, resetTx, txError, toast, chain]);
 
+  const handleSign = useCallback(async () => {
+    if (!groupId || !walletAddress) return;
+    setSigning(true);
+    try {
+      await signTontineGroup(groupId, walletAddress);
+      toast("Tontine signée et activée.", "success");
+      loadDetail();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Erreur", "error");
+    } finally {
+      setSigning(false);
+    }
+  }, [groupId, walletAddress, toast, loadDetail]);
+
+  const handleExecuteTurn = useCallback(async () => {
+    if (!groupId) return;
+    setExecutingTurn(true);
+    try {
+      await executeTontineTurn(groupId);
+      toast("Échéance exécutée (test). Prochain bénéficiaire.", "success");
+      await loadDetail();
+      getTontinePayouts(groupId).then(setPayouts);
+      getTontineDepositBalance(groupId).then((r) => setDepositBalance(r.balanceFormatted));
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Erreur", "error");
+    } finally {
+      setExecutingTurn(false);
+    }
+  }, [groupId, toast, loadDetail]);
+
   if (loadingDetail || !detail) {
     return (
       <div className="flex flex-col min-h-screen bg-[#FFFFFF]">
@@ -105,8 +204,7 @@ export function TontineDashboard({ groupId, onBack }: TontineDashboardProps) {
     );
   }
 
-  const members = chain.members.length > 0 ? chain.members : detail.members.map((m) => m.wallet_address as `0x${string}`);
-  const totalSaved = chain.memberCount * contributionFormatted;
+  const totalSaved = (isSimpleTontine ? members.length : chain.memberCount) * contributionFormatted;
 
   return (
     <div className="flex flex-col min-h-screen bg-[#FFFFFF]">
@@ -145,7 +243,7 @@ export function TontineDashboard({ groupId, onBack }: TontineDashboardProps) {
           <div className="flex justify-center">
             <div className="relative w-64 h-64">
               {members.map((addr, i) => {
-                const isBeneficiary = chain.currentBeneficiary?.toLowerCase() === addr.toLowerCase();
+                const isBeneficiary = currentBeneficiaryAddr?.toLowerCase() === addr.toLowerCase();
                 const angle = (i / members.length) * 2 * Math.PI - Math.PI / 2;
                 const r = 100;
                 const x = 128 + r * Math.cos(angle);
@@ -173,42 +271,189 @@ export function TontineDashboard({ groupId, onBack }: TontineDashboardProps) {
             </div>
           </div>
           <p className="text-center text-xs text-[#4a4a4a] mt-2">
-            Current beneficiary: {chain.currentBeneficiary
-              ? `${chain.currentBeneficiary.slice(0, 6)}…${chain.currentBeneficiary.slice(-4)}`
+            Bénéficiaire actuel : {currentBeneficiaryAddr
+              ? `${currentBeneficiaryAddr.slice(0, 6)}…${currentBeneficiaryAddr.slice(-4)}`
               : "—"}
           </p>
         </div>
 
-        {/* Action center */}
+        {/* Escrow: winner can release, provider sees waiting */}
+        {(lockedAsWinner.length > 0 || lockedAsProvider.length > 0) && (
+          <div className="space-y-4">
+            <h2 className="text-sm font-semibold text-[#4a4a4a] flex items-center gap-2">
+              <Lock className="size-4" />
+              Escrow
+            </h2>
+            {lockedAsWinner.map((escrow) => {
+              const amountFormatted = Number(formatUnits(BigInt(escrow.amount), USDT_DECIMALS)).toFixed(2);
+              return (
+                <div
+                  key={escrow.id}
+                  className="rounded-2xl border-2 border-[#295c4f] bg-[#295c4f]/5 p-4 space-y-3"
+                >
+                  <p className="text-sm text-[#4a4a4a]">
+                    You are the winner. Release ${amountFormatted} USDT to the service provider once you receive the service.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleReleaseFunds(escrow)}
+                    disabled={txState === "confirming" || !walletClient}
+                    className="w-full flex items-center justify-center gap-2 py-5 rounded-2xl font-bold text-white bg-[#295c4f] disabled:opacity-50"
+                  >
+                    <Unlock className="size-5" />
+                    {txState === "confirming" ? "Confirm in wallet…" : "Confirm Service & Release Funds"}
+                  </button>
+                </div>
+              );
+            })}
+            {lockedAsProvider.map((escrow) => {
+              const amountFormatted = Number(formatUnits(BigInt(escrow.amount), USDT_DECIMALS)).toFixed(2);
+              return (
+                <div
+                  key={escrow.id}
+                  className="rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-4 flex items-center gap-3"
+                >
+                  <Lock className="size-5 text-[#4a4a4a]" />
+                  <div>
+                    <p className="font-semibold text-[#1a1a1a]">Funds Locked — Waiting for confirmation</p>
+                    <p className="text-sm text-[#4a4a4a]">
+                      ${amountFormatted} USDT will be released to you when the winner confirms receipt of the service.
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Wallet de dépôt + Sign + Test (simple tontines, pas d'escrow) */}
+        {isSimpleTontine && (
+          <div className="space-y-4">
+            {detail?.deposit_wallet_address && (
+              <div className="rounded-2xl border-2 border-[#295c4f] bg-[#295c4f]/5 p-4 space-y-2">
+                <h2 className="text-sm font-semibold text-[#4a4a4a]">Wallet de dépôt (cotisations USDT)</h2>
+                <p className="text-sm text-[#4a4a4a]">
+                  Envoyez vos cotisations USDT à cette adresse. Les fonds seront libérés au bénéficiaire à chaque échéance.
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 truncate rounded-lg bg-[#f8fafc] px-3 py-2 text-xs font-mono text-[#1a1a1a]">
+                    {detail.deposit_wallet_address}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(detail.deposit_wallet_address!);
+                      toast("Adresse copiée", "success");
+                    }}
+                    className="shrink-0 rounded-lg border border-[#295c4f] px-3 py-2 text-xs font-medium text-[#295c4f]"
+                  >
+                    Copier
+                  </button>
+                </div>
+                {depositBalance != null && (
+                  <p className="text-sm font-semibold text-[#1a1a1a]">
+                    Dépôts reçus : <span className="text-[#295c4f]">{depositBalance} USDT</span>
+                    {Number(depositBalance) === 0 && (
+                      <span className="block text-xs font-normal text-[#4a4a4a] mt-1">
+                        Envoyez des USDT à l'adresse ci-dessus (depuis MetaMask ou votre wallet). Le solde se met à jour ici.
+                      </span>
+                    )}
+                  </p>
+                )}
+                <a
+                  href={`${explorerUrl}/address/${detail.deposit_wallet_address}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block text-sm font-medium text-[#295c4f] hover:underline"
+                >
+                  Voir les dépôts sur l'explorateur →
+                </a>
+              </div>
+            )}
+            <h2 className="text-sm font-semibold text-[#4a4a4a]">Signature & démo</h2>
+            {!detail?.creator_signed_at && isCreator && (
+              <button
+                type="button"
+                onClick={handleSign}
+                disabled={signing || !walletAddress}
+                className="w-full flex items-center justify-center gap-2 py-5 rounded-2xl font-bold text-white bg-[#295c4f] disabled:opacity-50"
+              >
+                {signing ? "Signature…" : "Signer la tontine"}
+              </button>
+            )}
+            {detail?.creator_signed_at && (
+              <p className="text-sm text-[#295c4f] font-medium">✓ Tontine signée et active</p>
+            )}
+            <button
+              type="button"
+              onClick={handleExecuteTurn}
+              disabled={executingTurn}
+              className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-semibold border-2 border-amber-500 text-amber-600 bg-amber-50 disabled:opacity-50"
+            >
+              {executingTurn ? "Exécution…" : "Exécuter l'échéance (test démo jury)"}
+            </button>
+
+            {payouts.length > 0 && (
+              <div className="rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-4 space-y-3">
+                <h2 className="text-sm font-semibold text-[#4a4a4a]">Historique des échéances (transactions)</h2>
+                <ul className="space-y-2">
+                  {payouts.map((p) => {
+                    const amountFormatted = (Number(p.amount) / 1e6).toFixed(2);
+                    const date = p.created_at ? new Date(p.created_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "—";
+                    return (
+                      <li key={p.id} className="flex items-center justify-between gap-2 text-sm">
+                        <span className="text-[#4a4a4a]">{date}</span>
+                        <span className="font-mono text-[#1a1a1a]">{p.to_address.slice(0, 6)}…{p.to_address.slice(-4)}</span>
+                        <span className="font-medium text-[#295c4f]">{amountFormatted} USDT</span>
+                        <a
+                          href={`${explorerUrl}/tx/${p.tx_hash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 text-[#295c4f] hover:underline"
+                        >
+                          Voir la tx →
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Action center (on-chain) */}
         <div className="space-y-4">
           <h2 className="text-sm font-semibold text-[#4a4a4a]">Actions</h2>
 
-          <button
-            type="button"
-            onClick={handlePay}
-            disabled={!chain.isMember || txState === "confirming" || !walletClient}
-            className="w-full flex items-center justify-center gap-2 py-5 rounded-2xl font-bold text-white bg-[#295c4f] disabled:opacity-50"
-          >
-            <Banknote className="size-5" />
-            {txState === "confirming" ? "Confirm in wallet…" : "Pay Contribution"}
-            {contributionFormatted > 0 && ` ($${contributionFormatted.toFixed(2)} USDT)`}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleClaim}
-            disabled={!hasPendingWithdrawal || txState === "confirming" || !walletClient}
-            className="w-full flex items-center justify-center gap-2 py-5 rounded-2xl font-bold border-2 border-[#295c4f] text-[#295c4f] disabled:opacity-50"
-          >
-            <Banknote className="size-5" />
-            Claim Pot
-            {chain.pendingWithdrawal && ` ($${Number(chain.pendingWithdrawal).toFixed(2)} USDT)`}
-          </button>
-
-          {!walletClient && (
-            <p className="text-sm text-[#4a4a4a] text-center">
-              Connect your wallet to pay or claim.
-            </p>
+          {!isSimpleTontine && (
+            <>
+              <button
+                type="button"
+                onClick={handlePay}
+                disabled={!chain.isMember || txState === "confirming" || !walletClient}
+                className="w-full flex items-center justify-center gap-2 py-5 rounded-2xl font-bold text-white bg-[#295c4f] disabled:opacity-50"
+              >
+                <Banknote className="size-5" />
+                {txState === "confirming" ? "Confirm in wallet…" : "Pay Contribution"}
+                {contributionFormatted > 0 && ` ($${contributionFormatted.toFixed(2)} USDT)`}
+              </button>
+              <button
+                type="button"
+                onClick={handleClaim}
+                disabled={!hasPendingWithdrawal || txState === "confirming" || !walletClient}
+                className="w-full flex items-center justify-center gap-2 py-5 rounded-2xl font-bold border-2 border-[#295c4f] text-[#295c4f] disabled:opacity-50"
+              >
+                <Banknote className="size-5" />
+                Claim Pot
+                {chain.pendingWithdrawal && ` ($${Number(chain.pendingWithdrawal).toFixed(2)} USDT)`}
+              </button>
+              {!walletClient && (
+                <p className="text-sm text-[#4a4a4a] text-center">
+                  Connect your wallet to pay or claim.
+                </p>
+              )}
+            </>
           )}
         </div>
 
@@ -219,8 +464,8 @@ export function TontineDashboard({ groupId, onBack }: TontineDashboardProps) {
             Members
           </h2>
           <div className="space-y-2">
-            {(members.length ? members : detail.members.map((m) => m.wallet_address)).map((addr, i) => {
-              const isBeneficiary = chain.currentBeneficiary?.toLowerCase() === addr.toLowerCase();
+            {(members.length ? members : detail?.members?.map((m) => m.wallet_address) ?? []).map((addr, i) => {
+              const isBeneficiary = currentBeneficiaryAddr?.toLowerCase() === addr.toLowerCase();
               const isMe = addr.toLowerCase() === walletAddress?.toLowerCase();
               return (
                 <div

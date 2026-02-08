@@ -1,0 +1,128 @@
+// Plasma Nexus - Schema for Tontine + Escrow flow
+// Run: npx prisma migrate dev --name init
+// (If DB already exists, run the raw SQL migration in plasma_database/migrations/ first, then: npx prisma db pull)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// Enums
+// =============================================================================
+
+enum TontineType {
+  STANDARD       // Payout goes directly to winner (withdraw)
+  ESCROW_LINKED  // Payout goes to locked escrow for service provider
+}
+
+enum EscrowStatus {
+  LOCKED   // Funds held, waiting for winner to confirm service
+  RELEASED // Funds sent to provider
+}
+
+// =============================================================================
+// Core: Users (Identity)
+// =============================================================================
+
+model User {
+  walletAddress   String   @id @map("wallet_address") @db.VarChar(42)
+  pseudo          String?  @db.VarChar(50)
+  reputationScore Int      @default(100) @map("reputation_score")
+  kycValidated    Boolean  @default(false) @map("kyc_validated")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  tontineMembers TontineMember[]
+}
+
+// =============================================================================
+// Services
+// =============================================================================
+
+model ServicesRegistry {
+  id                   Int      @id @default(autoincrement())
+  name                 String   @db.VarChar(100)
+  serviceType          String   @map("service_type") @db.VarChar(50)
+  smartContractAddress String   @unique @map("smart_contract_address") @db.VarChar(42)
+  createdAt            DateTime @default(now()) @map("created_at")
+}
+
+model TontineGroup {
+  id                    String    @id @default(uuid()) @db.Uuid
+  name                  String?   @db.VarChar(100)
+  type                  TontineType @default(STANDARD) @db.VarChar(20)
+  payoutDetails         String?   @map("payout_details") @db.Text // JSON: service description, provider address for ESCROW_LINKED
+  frequencySeconds      Int       @map("frequency_seconds")
+  contributionAmount    BigInt    @map("contribution_amount")
+  collateralAmount      BigInt    @map("collateral_amount")
+  status                String    @default("active") @db.VarChar(20)
+  contractTontineId     Int?      @map("contract_tontine_id")
+  smartContractAddress  String?   @map("smart_contract_address") @db.VarChar(42)
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  members           TontineMember[]
+  escrowTransactions EscrowTransaction[]
+}
+
+model TontineMember {
+  id               Int      @id @default(autoincrement())
+  tontineGroupId   String   @map("tontine_group_id") @db.Uuid
+  walletAddress    String   @map("wallet_address") @db.VarChar(42)
+  turnPosition     Int      @map("turn_position")
+  collateralStatus String   @default("ok") @map("collateral_status") @db.VarChar(20)
+  joinedAt         DateTime @default(now()) @map("joined_at")
+
+  tontineGroup TontineGroup @relation(fields: [tontineGroupId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [walletAddress], references: [walletAddress], onDelete: Cascade)
+
+  @@unique([tontineGroupId, walletAddress])
+  @@index([walletAddress])
+  @@index([tontineGroupId])
+}
+
+// =============================================================================
+// Escrow (linked to Tontine payout)
+// =============================================================================
+
+model EscrowTransaction {
+  id             String       @id @default(uuid()) @db.Uuid
+  tontineGroupId String       @map("tontine_group_id") @db.Uuid
+  contractId     String?      @map("contract_id") @db.VarChar(66) // on-chain escrow id / tx hash
+  beneficiary    String       @map("beneficiary") @db.VarChar(42) // service provider (who receives when released)
+  winnerAddress  String       @map("winner_address") @db.VarChar(42) // tontine winner (who confirms & releases)
+  amount         BigInt       @db.BigInt
+  status         EscrowStatus @default(LOCKED) @db.VarChar(20)
+  createdAt      DateTime     @default(now()) @map("created_at")
+  releasedAt     DateTime?    @map("released_at")
+
+  tontineGroup TontineGroup @relation(fields: [tontineGroupId], references: [id], onDelete: Cascade)
+
+  @@index([tontineGroupId])
+  @@index([beneficiary])
+  @@index([winnerAddress])
+}
+
+// =============================================================================
+// Cache: blockchain_events
+// =============================================================================
+
+model BlockchainEvent {
+  id           Int      @id @default(autoincrement())
+  txHash       String   @map("tx_hash") @db.VarChar(66)
+  blockNumber  BigInt   @map("block_number")
+  methodName   String?  @map("method_name") @db.VarChar(100)
+  fromAddress  String?  @map("from_address") @db.VarChar(42)
+  toAddress    String?  @map("to_address") @db.VarChar(42)
+  payload      Json?    @db.JsonB
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([txHash])
+  @@index([blockNumber])
+  @@index([fromAddress])
+}

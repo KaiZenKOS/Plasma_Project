@@ -19,16 +19,31 @@ async function request<T>(
     ? `${path}?${new URLSearchParams(Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])))}`
     : path;
   const url = path.startsWith("http") ? pathWithParams : `${base}${path.startsWith("/") ? "" : "/"}${pathWithParams}`;
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...init.headers,
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...init.headers,
+      },
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    const isConnectionError =
+      msg === "Failed to fetch" ||
+      e instanceof TypeError ||
+      /connection refused|network error|load failed/i.test(String(e));
+    if (isConnectionError) {
+      throw new Error(
+        "Backend unreachable. Start it with: cd plasma_backend && npm run dev",
+      );
+    }
+    throw e;
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((data as ApiError).error ?? res.statusText ?? "API error");
+    throw new Error((data as ApiError).error ?? res.statusText ?? "Erreur API");
   }
   return data as T;
 }
@@ -36,6 +51,8 @@ async function request<T>(
 export const api = {
   get: <T>(path: string, params?: Record<string, string | number>) =>
     request<T>(path, { method: "GET", params }),
+  post: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
 };

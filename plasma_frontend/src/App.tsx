@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ViewKey } from "./types/navigation";
+import { PlasmaNetworkBanner } from "./components/PlasmaNetworkBanner";
 import { TontineFeatureView } from "./features/tontine";
 import { AssurancePage } from "./pages/AssurancePage";
 import { EscrowPage } from "./pages/EscrowPage";
@@ -23,7 +24,10 @@ function App() {
   }, [activeView]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">{content}</div>
+    <div className="min-h-screen bg-background text-foreground">
+      <PlasmaNetworkBanner />
+      {content}
+    </div>
   );
 }
 

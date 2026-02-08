@@ -45,32 +45,45 @@ Interface Plasma Nexus (React + TypeScript + Vite). Utilise le backend Plasma po
 
 En dev, Vite proxy redirige `/api` vers `http://localhost:3000`. Pour une autre URL backend, définir `VITE_API_URL` (ex. `VITE_API_URL=http://localhost:3000/api`).
 
-## Demarrage rapide Anvil (local)
+## Utiliser le testnet Plasma (recommandé)
 
-### 1) Lancer Anvil
+Toutes les transactions et services utilisent le **Plasma Testnet** (chain ID 9746). Le frontend et le backend sont configurés pour cela.
 
-```powershell
-anvil --host 127.0.0.1 --port 8545
-```
-
-### 2) Deployer les contrats
-
-```powershell
-Set-Location "C:\Users\theca\Desktop\Projet_Plasma\plasma_blockchain"
-$env:PRIVATE_KEY="<TA_CLE_PRIVEE>"
-forge script script/Deploy.s.sol:Deploy --rpc-url http://127.0.0.1:8545 --broadcast
-```
-
-### 3) Configurer le frontend
+### 1) Configurer le frontend (`.env`)
 
 ```dotenv
-VITE_PLASMA_RPC_URL=http://127.0.0.1:8545
-VITE_PLASMA_CHAIN_ID=31337
-VITE_PLASMA_CHAIN_NAME=Anvil
-VITE_PLASMA_EXPLORER_URL=http://127.0.0.1:8545
-VITE_USDT_ADDRESS=<ADRESSE_MOCK_USDT>
-VITE_TONTINE_CONTRACT_ADDRESS=<ADRESSE_TONTINE_SERVICE>
+VITE_PLASMA_RPC_URL=https://testnet-rpc.plasma.to
+VITE_PLASMA_CHAIN_ID=9746
+VITE_PLASMA_CHAIN_NAME=Plasma Testnet
+VITE_PLASMA_EXPLORER_URL=https://testnet.plasmascan.to
+VITE_USDT_ADDRESS=0x502012b361aebce43b26ec812b74d9a51db4d412
+VITE_TONTINE_CONTRACT_ADDRESS=<adresse après déploiement>
+VITE_NEXUS_REGISTRY_ADDRESS=<adresse après déploiement>
 ```
+
+### 2) Configurer le backend (`.env`)
+
+```dotenv
+RPC_URL=https://testnet-rpc.plasma.to
+CHAIN_ID=9746
+TONTINE_SERVICE_ADDRESS=<adresse Tontine déployée sur testnet>
+FROM_BLOCK=0
+```
+
+### 3) Déployer les contrats sur le testnet (optionnel)
+
+Depuis `plasma_blockchain` :
+
+```bash
+export PRIVATE_KEY="<ta_cle_privee>"
+forge script script/Deploy.s.sol:Deploy --rpc-url https://testnet-rpc.plasma.to --broadcast --chain-id 9746
+```
+
+Puis mettre à jour `VITE_TONTINE_CONTRACT_ADDRESS`, `VITE_NEXUS_REGISTRY_ADDRESS` et `TONTINE_SERVICE_ADDRESS` avec les adresses affichées.
+
+### 4) Anvil (local, optionnel)
+
+Pour du dev 100 % local, lancer Anvil puis utiliser `VITE_PLASMA_RPC_URL=http://127.0.0.1:8545`, `VITE_PLASMA_CHAIN_ID=31337` et les adresses du déploiement local.
 
 ## Variables front (hybride)
 

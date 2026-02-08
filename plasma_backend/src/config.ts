@@ -9,8 +9,10 @@ export const config = {
       "postgresql://plasma:plasma@localhost:5432/plasma",
   },
   blockchain: {
-    rpcUrl: process.env.RPC_URL ?? "https://rpc.plasma.chain",
+    rpcUrl: process.env.RPC_URL ?? "https://testnet-rpc.plasma.to",
+    chainId: Number(process.env.CHAIN_ID ?? "9746"),
     tontineServiceAddress: (process.env.TONTINE_SERVICE_ADDRESS ?? "") as `0x${string}`,
+    usdtAddress: (process.env.USDT_ADDRESS ?? "0x502012b361aebce43b26ec812b74d9a51db4d412") as `0x${string}`,
     fromBlock: BigInt(process.env.FROM_BLOCK ?? "0"),
   },
   insurance: {

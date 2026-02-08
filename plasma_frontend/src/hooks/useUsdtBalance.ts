@@ -65,6 +65,11 @@ export function useUsdtBalance(address: string | null): UsdtBalanceState {
     }
     setLoading(true);
     setError(null);
+    console.log("[useUsdtBalance] Wallet connecté:", {
+      address,
+      usdtContract: usdtAddress,
+      rpcUrl: rpcUrl ? `${rpcUrl.slice(0, 30)}...` : "(vide)",
+    });
     try {
       const [rawBalance, rawDecimals] = await Promise.all([
         publicClient.readContract({
@@ -80,11 +85,24 @@ export function useUsdtBalance(address: string | null): UsdtBalanceState {
         }),
       ]);
       const dec = Number(rawDecimals);
+      const formatted = formatUnits(rawBalance, dec);
+      console.log("[useUsdtBalance] Données reçues:", {
+        rawBalance: String(rawBalance),
+        rawDecimals,
+        decimals: dec,
+        balanceFormatted: formatted,
+      });
       setDecimals(dec);
-      setBalance(formatUnits(rawBalance, dec));
+      setBalance(formatted);
     } catch (err) {
+      console.log("[useUsdtBalance] Erreur:", err);
+      const rawMessage = err instanceof Error ? err.message : "";
+      const isContractError =
+        rawMessage.includes("returned no data") ||
+        rawMessage.includes("balanceOf") ||
+        rawMessage.includes("is not a contract");
       setError(
-        err instanceof Error ? err.message : "Balance USDT indisponible",
+        isContractError ? "Solde USDT indisponible sur ce réseau" : rawMessage || "Balance USDT indisponible",
       );
       setBalance(null);
       setDecimals(null);

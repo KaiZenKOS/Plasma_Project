@@ -11,8 +11,8 @@ import { IMockUSDT } from "./interfaces/IMockUSDT.sol";
  * Référence NexusRegistry pour architecture Plug & Play.
  */
 contract TontineService is Ownable {
-    INexusRegistry public immutable nexusRegistry;
-    IMockUSDT public immutable stablecoin;
+    INexusRegistry public immutable NEXUS_REGISTRY;
+    IMockUSDT public immutable STABLECOIN;
 
     struct TontineGroup {
         uint256 contributionAmount;  // par tour, en unités stablecoin (6 decimals)
@@ -54,13 +54,17 @@ contract TontineService is Ownable {
     error TransferFailed();
 
     constructor(address _nexusRegistry, address _stablecoin) Ownable() {
-        nexusRegistry = INexusRegistry(_nexusRegistry);
-        stablecoin = IMockUSDT(_stablecoin);
+        NEXUS_REGISTRY = INexusRegistry(_nexusRegistry);
+        STABLECOIN = IMockUSDT(_stablecoin);
     }
 
     modifier onlyRegistered() {
-        if (!nexusRegistry.isRegistered(address(this))) revert NotRegisteredService();
+        _onlyRegistered();
         _;
+    }
+
+    function _onlyRegistered() internal view {
+        if (!NEXUS_REGISTRY.isRegistered(address(this))) revert NotRegisteredService();
     }
 
     function createTontine(
@@ -98,10 +102,10 @@ contract TontineService is Ownable {
         if (!isMember[tontineId][msg.sender]) revert NotMember();
 
         uint256 amount = g.contributionAmount;
-        if (stablecoin.allowance(msg.sender, address(this)) < amount) revert InsufficientAllowance();
+        if (STABLECOIN.allowance(msg.sender, address(this)) < amount) revert InsufficientAllowance();
 
         lastPaidAt[tontineId][msg.sender] = block.timestamp;
-        bool ok = stablecoin.transferFrom(msg.sender, address(this), amount);
+        bool ok = STABLECOIN.transferFrom(msg.sender, address(this), amount);
         if (!ok) revert TransferFailed();
 
         uint256 turn = g.currentTurnIndex;
@@ -150,7 +154,7 @@ contract TontineService is Ownable {
         uint256 amount = pendingWithdrawals[msg.sender];
         require(amount > 0, "Tontine: nothing to withdraw");
         pendingWithdrawals[msg.sender] = 0;
-        bool ok = stablecoin.transfer(msg.sender, amount);
+        bool ok = STABLECOIN.transfer(msg.sender, amount);
         require(ok, "Tontine: transfer failed");
         emit Withdrawal(msg.sender, amount);
     }

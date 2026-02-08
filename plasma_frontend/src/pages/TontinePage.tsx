@@ -59,10 +59,15 @@ export function TontinePage({ onNavigate }: TontinePageProps) {
   const claimAmount = tontineReads.pendingWithdrawal;
 
   const load = useCallback(async () => {
+    if (!walletAddress) {
+      setGroups([]);
+      setLoading(false);
+      return;
+    }
     setError(null);
     setLoading(true);
     try {
-      const data = await getTontineGroups();
+      const data = await getTontineGroups(walletAddress);
       setGroups(data);
     } catch (e) {
       setError(
@@ -72,7 +77,7 @@ export function TontinePage({ onNavigate }: TontinePageProps) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [walletAddress]);
 
   const loadDetail = useCallback(async (id: string) => {
     setDetailError(null);

@@ -1,10 +1,13 @@
 import { Icon } from "@iconify/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getUserProfile, getUserScore } from "../api/core";
-import { getHistory } from "../api/history";
+import { backfillHistory, getHistory } from "../api/history";
+import { getTontineGroups } from "../api/tontine";
 import type { BlockchainEvent, User } from "../api/types";
+import type { TontineGroup } from "../api/types";
 import { LoginButton } from "../components/LoginButton";
 import { useUser } from "../context/UserContext";
+import { useNativeBalance } from "../hooks/useNativeBalance";
 import { useUsdtBalance } from "../hooks/useUsdtBalance";
 import type { ViewKey } from "../types/navigation";
 
@@ -18,9 +21,16 @@ function clampScore(score: number) {
 }
 
 function formatEventLabel(event: BlockchainEvent) {
+  const labels: Record<string, string> = {
+    TontineCreated: "Tontine créée",
+    MemberJoined: "Membre rejoint",
+    ContributionPaid: "Cotisation payée",
+    CollateralSlashed: "Collateral slashed",
+  };
+  if (event.method_name && labels[event.method_name]) return labels[event.method_name];
   if (event.method_name) return event.method_name;
-  if (event.to_address) return `Tx to ${event.to_address.slice(0, 6)}...`;
-  return "Blockchain event";
+  if (event.to_address) return `Tx vers ${event.to_address.slice(0, 6)}...`;
+  return "Événement blockchain";
 }
 
 function formatEventTime(value: string) {
@@ -41,11 +51,19 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [profile, setProfile] = useState<User | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [tontineGroups, setTontineGroups] = useState<TontineGroup[]>([]);
   const {
     balance,
     loading: balanceLoading,
     error: balanceError,
+    reload: reloadUsdtBalance,
   } = useUsdtBalance(walletAddress);
+  const {
+    balance: xplBalance,
+    loading: xplLoading,
+    error: xplError,
+    reload: reloadXplBalance,
+  } = useNativeBalance(walletAddress);
 
   const loadScore = useCallback(async () => {
     if (!walletAddress) {
@@ -87,16 +105,27 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
     }
     setEventsError(null);
     try {
-      const data = await getHistory({
+      let data = await getHistory({
         address: walletAddress,
-        limit: 5,
+        limit: 30,
       });
+      if (data.length === 0) {
+        try {
+          await backfillHistory(walletAddress);
+          data = await getHistory({ address: walletAddress, limit: 30 });
+        } catch {
+          // backfill optionnel (backend peut ne pas avoir TONTINE_SERVICE_ADDRESS)
+        }
+      }
       setEvents(data);
     } catch (error) {
+      const msg = error instanceof Error ? error.message : "Impossible de charger les events";
       setEventsError(
-        error instanceof Error
-          ? error.message
-          : "Impossible de charger les events",
+        msg === "Failed to fetch" ||
+          msg.includes("Backend unreachable") ||
+          msg.includes("Backend injoignable")
+          ? "Backend unreachable. Start it with: cd plasma_backend && npm run dev"
+          : msg,
       );
       setEvents([]);
     }
@@ -114,6 +143,43 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
     loadEvents();
   }, [loadEvents]);
 
+  const loadTontines = useCallback(async () => {
+    if (!walletAddress) {
+      setTontineGroups([]);
+      return;
+    }
+    try {
+      const data = await getTontineGroups(walletAddress);
+      setTontineGroups(data);
+    } catch {
+      setTontineGroups([]);
+    }
+  }, [walletAddress]);
+
+  useEffect(() => {
+    loadTontines();
+  }, [loadTontines]);
+
+  // Rafraîchir soldes et historique quand l'onglet redevient visible ou toutes les 30s
+  useEffect(() => {
+    if (!walletAddress) return;
+    const refresh = () => {
+      reloadUsdtBalance();
+      reloadXplBalance();
+      loadEvents();
+      loadTontines();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    const interval = setInterval(refresh, 30_000);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      clearInterval(interval);
+    };
+  }, [walletAddress, reloadUsdtBalance, reloadXplBalance, loadEvents, loadTontines]);
+
   const reputation = useMemo(
     () => (score === null ? null : clampScore(score)),
     [score],
@@ -127,6 +193,13 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
         ? `${Number(balance).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} USDT`
         : "Non disponible"
     : "Connecte ton wallet";
+  const xplValue = (() => {
+    if (!isConnected) return "-";
+    if (xplLoading) return "Chargement...";
+    if (xplBalance != null) return `${Number(xplBalance).toLocaleString("fr-FR", { maximumFractionDigits: 4 })} XPL`;
+    if (xplError) return "Indisponible";
+    return "-";
+  })();
   const lastEvent = events[0];
   const activityLine = lastEvent
     ? `Derniere activite: ${formatEventLabel(lastEvent)}`
@@ -167,6 +240,9 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
                 <h2 className="text-3xl font-bold font-heading text-foreground tracking-tight">
                   {balanceValue}
                 </h2>
+                <p className="mt-1 text-base font-semibold text-foreground/80">
+                  Solde XPL: {xplValue}
+                </p>
                 <div className="flex items-center gap-1 mt-2 text-sm text-secondary font-medium">
                   <Icon icon="solar:graph-up-linear" className="size-4" />
                   <span>{activityLine}</span>
@@ -230,7 +306,9 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
                     </p>
                     {balanceError && (
                       <p className="mt-1 text-[10px] text-destructive">
-                        {balanceError}
+                        {balanceError === "Failed to fetch"
+                          ? "RPC ou réseau indisponible. Réessayez."
+                          : balanceError}
                       </p>
                     )}
                   </div>
@@ -263,29 +341,74 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
               Services
             </h3>
             <div className="grid grid-cols-1 gap-4">
-              <button
-                type="button"
-                onClick={() => onNavigate("tontine")}
-                className="flex items-center p-5 bg-white border border-border rounded-2xl gap-4 active:bg-muted/50 transition-colors"
-              >
-                <div className="flex items-center justify-center size-14 rounded-full bg-blue-50 text-blue-600">
-                  <Icon icon="solar:refresh-circle-bold" className="size-8" />
-                </div>
-                <div className="flex-1 text-left">
-                  <h4 className="text-lg font-bold text-foreground">
-                    Ma Tontine
-                  </h4>
-                  <p className="text-sm text-muted-foreground">
-                    Manage your savings circles
-                  </p>
-                </div>
-                <div className="p-2 text-muted-foreground">
-                  <Icon
-                    icon="solar:alt-arrow-right-linear"
-                    className="size-6"
-                  />
-                </div>
-              </button>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => onNavigate("tontine")}
+                  className="flex w-full items-center p-5 bg-white border border-border rounded-2xl gap-4 active:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-center justify-center size-14 rounded-full bg-blue-50 text-blue-600">
+                    <Icon icon="solar:refresh-circle-bold" className="size-8" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <h4 className="text-lg font-bold text-foreground">
+                      Ma Tontine
+                    </h4>
+                    <p className="text-sm text-muted-foreground">
+                      Manage your savings circles
+                    </p>
+                  </div>
+                  <div className="p-2 text-muted-foreground">
+                    <Icon
+                      icon="solar:alt-arrow-right-linear"
+                      className="size-6"
+                    />
+                  </div>
+                </button>
+                {walletAddress && (
+                  <div className="mt-3 rounded-2xl border border-border bg-white overflow-hidden">
+                    <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                      <span className="text-sm font-semibold text-foreground">
+                        Vos tontines
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate("tontine")}
+                        className="text-xs font-medium text-primary"
+                      >
+                        Voir tout
+                      </button>
+                    </div>
+                    <div className="divide-y divide-border">
+                      {tontineGroups.length === 0 ? (
+                        <div className="px-4 py-5 text-center text-sm text-muted-foreground">
+                          Aucune tontine. Créez-en une ou rejoignez-en une.
+                        </div>
+                      ) : (
+                        tontineGroups.slice(0, 3).map((group) => {
+                          const contrib =
+                            Number(group.contribution_amount) / 1e6;
+                          return (
+                            <button
+                              key={group.id}
+                              type="button"
+                              onClick={() => onNavigate("tontine")}
+                              className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-muted/50 transition-colors"
+                            >
+                              <span className="font-medium text-foreground truncate">
+                                {group.name ?? "Tontine"}
+                              </span>
+                              <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                                ${contrib.toFixed(2)} USDT
+                              </span>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => onNavigate("escrow")}
@@ -336,51 +459,63 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
         <div className="mt-2 bg-muted/50 py-8 px-6 rounded-t-3xl min-h-[200px]">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-bold font-heading text-foreground">
-              Recent Activity
+              Historique des transactions
             </h3>
             <button
               type="button"
               onClick={loadEvents}
               className="text-sm font-medium text-primary"
             >
-              Rafraichir
+              Rafraîchir
             </button>
           </div>
-          {eventsError ? (
+          {!walletAddress ? (
+            <div className="rounded-2xl bg-white border border-border px-4 py-6 text-sm text-muted-foreground text-center">
+              Connecte ton wallet pour voir l&apos;historique.
+            </div>
+          ) : eventsError ? (
             <div className="rounded-2xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
               {eventsError}
             </div>
           ) : events.length === 0 ? (
             <div className="rounded-2xl bg-white border border-border px-4 py-6 text-sm text-muted-foreground text-center">
-              No blockchain events yet.
+              Aucune transaction pour ce wallet.
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {events.map((event) => (
-                <div
+                <a
                   key={`${event.tx_hash}-${event.block_number}`}
-                  className="flex items-center justify-between"
+                  href={
+                    import.meta.env.VITE_PLASMA_EXPLORER_URL
+                      ? `${import.meta.env.VITE_PLASMA_EXPLORER_URL}/tx/${event.tx_hash}`
+                      : "#"
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between rounded-xl bg-white border border-border px-4 py-3 hover:bg-muted/30 transition-colors"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center size-10 rounded-full bg-white border border-border">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center justify-center size-10 rounded-full bg-primary/10 shrink-0">
                       <Icon
                         icon="solar:wallet-money-bold"
-                        className="size-5 text-blue-600"
+                        className="size-5 text-primary"
                       />
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">
                         {formatEventLabel(event)}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {formatEventTime(event.created_at)}
+                        {formatEventTime(event.created_at)} · Bloc {event.block_number}
                       </p>
                     </div>
                   </div>
-                  <span className="text-xs font-semibold text-muted-foreground">
-                    Block {event.block_number}
-                  </span>
-                </div>
+                  <Icon
+                    icon="solar:alt-arrow-right-linear"
+                    className="size-5 text-muted-foreground shrink-0 ml-2"
+                  />
+                </a>
               ))}
             </div>
           )}

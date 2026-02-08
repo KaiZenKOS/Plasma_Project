@@ -1,5 +1,6 @@
 /**
- * ABI for TontineService.sol (Plasma) — uint256-based, Pull pattern.
+ * ABI for TontineService.sol on Plasma Testnet (RPC testnet-rpc.plasma.to).
+ * Do not use Foundry/Anvil-generated ABI — this matches the deployed contract on Plasma.
  */
 export const TONTINE_ABI = [
   {
@@ -92,5 +93,65 @@ export const TONTINE_ABI = [
     outputs: [{ name: "", type: "uint256" }],
     stateMutability: "view",
     type: "function",
+  },
+  {
+    type: "event",
+    name: "TontineCreated",
+    inputs: [
+      { name: "tontineId", type: "uint256", indexed: true },
+      { name: "contributionAmount", type: "uint256", indexed: false },
+      { name: "frequencySeconds", type: "uint256", indexed: false },
+      { name: "collateralAmount", type: "uint256", indexed: false },
+    ],
+  },
+] as const;
+
+/**
+ * Minimal ABI for TontineEscrow.sol (createTontine with serviceProvider, releaseFunds).
+ */
+export const TONTINE_ESCROW_ABI = [
+  {
+    inputs: [
+      { name: "contributionAmount", type: "uint256" },
+      { name: "frequencySeconds", type: "uint256" },
+      { name: "collateralAmount", type: "uint256" },
+      { name: "serviceProvider", type: "address" },
+    ],
+    name: "createTontine",
+    outputs: [{ name: "tontineId", type: "uint256" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "tontineId", type: "uint256" }],
+    name: "payContribution",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "escrowId", type: "uint256" }],
+    name: "releaseFunds",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "nextTontineId",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    type: "event",
+    name: "TontineCreated",
+    inputs: [
+      { name: "tontineId", type: "uint256", indexed: true },
+      { name: "contributionAmount", type: "uint256", indexed: false },
+      { name: "frequencySeconds", type: "uint256", indexed: false },
+      { name: "collateralAmount", type: "uint256", indexed: false },
+      { name: "serviceProvider", type: "address", indexed: false },
+    ],
   },
 ] as const;

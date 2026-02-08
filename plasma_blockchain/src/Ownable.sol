@@ -16,8 +16,12 @@ abstract contract Ownable {
     }
 
     modifier onlyOwner() {
-        require(owner == msg.sender, "Ownable: caller is not the owner");
+        _onlyOwner();
         _;
+    }
+
+    function _onlyOwner() internal view {
+        require(owner == msg.sender, "Ownable: caller is not the owner");
     }
 
     function transferOwnership(address newOwner) public virtual onlyOwner {

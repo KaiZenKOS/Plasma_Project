@@ -27,7 +27,7 @@ createRoot(document.getElementById("root")!).render(
         appearance: {
           theme: "light",
           accentColor: "#295c4f",
-          logo: "https://ton-logo-url.com/logo.png",
+          logo: "/vite.svg",
           // Show wallet login first to make MetaMask option obvious
           showWalletLoginFirst: true,
           // Prioritize external wallets (MetaMask first)

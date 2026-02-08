@@ -8,7 +8,12 @@
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "worker": "tsx src/workers/blockchainIndexer.ts",
-    "worker:insurance": "tsx src/workers/insuranceWorker.ts"
+    "worker:insurance": "tsx src/workers/insuranceWorker.ts",
+    "migrate": "tsx scripts/migrate-tontine-escrow.ts",
+    "migrate:simple": "tsx scripts/migrate-simple-tontine.ts",
+    "migrate:sign": "tsx scripts/migrate-sign-and-turn.ts",
+    "migrate:deposit": "tsx scripts/migrate-deposit-wallet.ts",
+    "migrate:payouts": "tsx scripts/migrate-tontine-payouts.ts"
   },
   "dependencies": {
     "cors": "^2.8.6",

@@ -18,6 +18,7 @@ type Screen = "list" | "create" | "dashboard";
 export function TontineFeatureView({ onNavigate }: TontineFeatureViewProps) {
   const [screen, setScreen] = useState<Screen>("list");
   const [selectedGroup, setSelectedGroup] = useState<TontineGroup | null>(null);
+  const [listKey, setListKey] = useState(0);
 
   if (screen === "dashboard" && selectedGroup) {
     return (
@@ -58,6 +59,7 @@ export function TontineFeatureView({ onNavigate }: TontineFeatureViewProps) {
           {screen === "list" && (
             <div className="space-y-8">
               <TontineList
+                key={listKey}
                 onSelectTontine={(group) => {
                   setSelectedGroup(group);
                   setScreen("dashboard");
@@ -70,6 +72,7 @@ export function TontineFeatureView({ onNavigate }: TontineFeatureViewProps) {
             <div className="max-w-lg mx-auto">
               <CreateTontineForm
                 onSuccess={() => {
+                  setListKey((k) => k + 1);
                   setScreen("list");
                 }}
               />

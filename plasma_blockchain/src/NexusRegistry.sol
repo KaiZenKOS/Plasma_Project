@@ -20,8 +20,12 @@ contract NexusRegistry {
     }
 
     modifier onlyOwner() {
-        require(msg.sender == owner, "NexusRegistry: not owner");
+        _onlyOwner();
         _;
+    }
+
+    function _onlyOwner() internal view {
+        require(msg.sender == owner, "NexusRegistry: not owner");
     }
 
     function registerService(address service, string calldata name) external onlyOwner {

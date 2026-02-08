@@ -4,6 +4,7 @@ import cors from "cors";
 import { coreRouter } from "./routes/core.js";
 import { publicRouter } from "./routes/public.js";
 import { tontineRouter } from "./routes/tontine.js";
+import { easRouter } from "./routes/eas.js";
 import { config } from "./config.js";
 
 const app = express();
@@ -18,6 +19,7 @@ app.use(express.json());
 app.use("/api", publicRouter);
 app.use("/api/core", coreRouter);
 app.use("/api/tontine", tontineRouter);
+app.use("/api/eas", easRouter);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "plasma-backend" });

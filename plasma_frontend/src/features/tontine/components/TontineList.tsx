@@ -15,18 +15,28 @@ export function TontineList({ onSelectTontine }: TontineListProps) {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!walletAddress) {
+      setGroups([]);
+      setLoading(false);
+      return;
+    }
     setError(null);
     setLoading(true);
     try {
-      const data = await getTontineGroups();
+      const data = await getTontineGroups(walletAddress);
       setGroups(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load tontines");
+      const msg = e instanceof Error ? e.message : "Failed to load tontines";
+      setError(
+        msg.includes("Backend unreachable") || msg.includes("Backend injoignable")
+          ? "Backend unreachable. Start it with: cd plasma_backend && npm run dev"
+          : msg,
+      );
       setGroups([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [walletAddress]);
 
   useEffect(() => {
     load();
@@ -51,8 +61,10 @@ export function TontineList({ onSelectTontine }: TontineListProps) {
   if (groups.length === 0) {
     return (
       <div className="rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-12 text-center text-[#4a4a4a]">
-        <p className="font-medium">No tontines yet</p>
-        <p className="text-sm mt-1">Create one or wait for an invite.</p>
+        <p className="font-medium">{walletAddress ? "No tontines yet" : "Connect your wallet"}</p>
+        <p className="text-sm mt-1">
+          {walletAddress ? "Create one or wait for an invite." : "To see your tontines or create one."}
+        </p>
       </div>
     );
   }

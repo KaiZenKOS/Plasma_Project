@@ -14,18 +14,20 @@ import {
 } from "../utils/ScoreCalculator.js";
 
 const TONTINE_ABI = [
+  parseAbiItem("event TontineCreated(uint256 indexed tontineId, uint256 contributionAmount, uint256 frequencySeconds, uint256 collateralAmount)"),
+  parseAbiItem("event MemberJoined(uint256 indexed tontineId, address indexed member, uint256 turnPosition)"),
   parseAbiItem("event ContributionPaid(uint256 indexed tontineId, address indexed member, uint256 amount, uint256 turnIndex)"),
   parseAbiItem("event CollateralSlashed(uint256 indexed tontineId, address indexed member, uint256 amount)"),
   parseAbiItem("event PaymentSuccessRecorded(address indexed user)"),
 ];
 
 function getChain() {
-  // Plasma / custom chain - adapter si besoin
+  const { rpcUrl, chainId } = config.blockchain;
   return {
-    id: 0,
-    name: "Plasma",
-    nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-    rpcUrls: { default: { http: [config.blockchain.rpcUrl] } },
+    id: chainId,
+    name: chainId === 9746 ? "Plasma Testnet" : "Plasma",
+    nativeCurrency: { name: "XPL", symbol: "XPL", decimals: 18 },
+    rpcUrls: { default: { http: [rpcUrl] } },
   } as const;
 }
 
@@ -88,7 +90,70 @@ async function main() {
     transport: http(rpcUrl),
   });
 
-  console.log("Blockchain indexer started. Watching ContributionPaid & CollateralSlashed.");
+  console.log("Blockchain indexer started. Watching TontineCreated, MemberJoined, ContributionPaid & CollateralSlashed.");
+
+  client.watchContractEvent({
+    address: tontineServiceAddress,
+    abi: TONTINE_ABI,
+    eventName: "TontineCreated",
+    fromBlock,
+    onLogs: async (logs) => {
+      for (const log of logs) {
+        const tontineId = (log.args as { tontineId?: bigint }).tontineId;
+        const contributionAmount = (log.args as { contributionAmount?: bigint }).contributionAmount;
+        const frequencySeconds = (log.args as { frequencySeconds?: bigint }).frequencySeconds;
+        const collateralAmount = (log.args as { collateralAmount?: bigint }).collateralAmount;
+        let fromAddress: string | null = null;
+        try {
+          const tx = await client.getTransaction({ hash: log.transactionHash! });
+          fromAddress = tx?.from?.toLowerCase() ?? null;
+        } catch {
+          // ignore
+        }
+        if (fromAddress) {
+          await ensureUser(fromAddress);
+          await recordEvent({
+            txHash: log.transactionHash ?? "",
+            blockNumber: log.blockNumber ?? 0n,
+            methodName: "TontineCreated",
+            fromAddress,
+            toAddress: tontineServiceAddress,
+            payload: {
+              tontineId: String(tontineId),
+              contributionAmount: String(contributionAmount),
+              frequencySeconds: String(frequencySeconds),
+              collateralAmount: String(collateralAmount),
+            },
+          });
+        }
+      }
+    },
+  });
+
+  client.watchContractEvent({
+    address: tontineServiceAddress,
+    abi: TONTINE_ABI,
+    eventName: "MemberJoined",
+    fromBlock,
+    onLogs: async (logs) => {
+      for (const log of logs) {
+        const member = (log.args as { member?: string }).member;
+        const tontineId = (log.args as { tontineId?: bigint }).tontineId;
+        const turnPosition = (log.args as { turnPosition?: bigint }).turnPosition;
+        if (!member) continue;
+        const address = member.toLowerCase();
+        await ensureUser(address);
+        await recordEvent({
+          txHash: log.transactionHash ?? "",
+          blockNumber: log.blockNumber ?? 0n,
+          methodName: "MemberJoined",
+          fromAddress: address,
+          toAddress: tontineServiceAddress,
+          payload: { tontineId: String(tontineId), turnPosition: String(turnPosition) },
+        });
+      }
+    },
+  });
 
   const unwatch = client.watchContractEvent({
     address: tontineServiceAddress,

@@ -24,8 +24,12 @@ contract MockUSDT {
     }
 
     modifier onlyMinter() {
-        require(msg.sender == minter, "MockUSDT: not minter");
+        _onlyMinter();
         _;
+    }
+
+    function _onlyMinter() internal view {
+        require(msg.sender == minter, "MockUSDT: not minter");
     }
 
     function mint(address to, uint256 amount) external onlyMinter {
