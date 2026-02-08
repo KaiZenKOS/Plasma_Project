@@ -215,7 +215,7 @@ export function JoinTontine({ tontineId, onSuccess }: JoinTontineProps) {
               </div>
               {needsApproval && (
                 <p className="text-xs text-[#f59e0b]">
-                  ⚠️ Approbation insuffisante. Approuvez d'abord l'utilisation de USDT.
+                  Approbation insuffisante. Approuvez d'abord l'utilisation de USDT.
                 </p>
               )}
               {hasEnoughAllowance && (
@@ -261,12 +261,12 @@ export function JoinTontine({ tontineId, onSuccess }: JoinTontineProps) {
           {isJoining ? (
             <>
               <Loader2 className="size-5 animate-spin" />
-              {txState === "confirming" ? "Confirmez dans votre wallet…" : isMining ? "⏳ Mining…" : "Traitement..."}
+              {txState === "confirming" ? "Confirmez dans votre wallet…" : isMining ? "Mining…" : "Traitement..."}
             </>
           ) : (
             <>
               <CheckCircle className="size-5" />
-              ✅ Rejoindre la tontine
+              Rejoindre la tontine
             </>
           )}
         </button>

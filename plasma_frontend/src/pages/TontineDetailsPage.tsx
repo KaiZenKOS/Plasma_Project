@@ -416,9 +416,9 @@ export function TontineDetailsPage() {
                   : "bg-[#6b7280]/10 text-[#6b7280] border border-[#6b7280]/20"
             }`}
           >
-            {tontineData.status === "Running" && "🟢 Running"}
-            {tontineData.status === "Open" && "⚪ Open"}
-            {tontineData.status === "Finished" && "🔴 Finished"}
+            {tontineData.status === "Running" && "Running"}
+            {tontineData.status === "Open" && "Open"}
+            {tontineData.status === "Finished" && "Finished"}
           </span>
         </div>
 

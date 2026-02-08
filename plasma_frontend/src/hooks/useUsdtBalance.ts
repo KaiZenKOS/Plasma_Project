@@ -2,11 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import { formatUnits } from "viem";
 import { publicClient } from "../blockchain/viem";
 
+// Préférer l'adresse dédiée à l'affichage du solde (token USDT réel), sinon fallback sur VITE_USDT_ADDRESS
 const usdtAddress =
-  typeof import.meta.env.VITE_USDT_ADDRESS === "string" &&
-  import.meta.env.VITE_USDT_ADDRESS
-    ? (import.meta.env.VITE_USDT_ADDRESS as `0x${string}`)
-    : null;
+  typeof import.meta.env.VITE_USDT_DISPLAY_ADDRESS === "string" &&
+  import.meta.env.VITE_USDT_DISPLAY_ADDRESS
+    ? (import.meta.env.VITE_USDT_DISPLAY_ADDRESS as `0x${string}`)
+    : typeof import.meta.env.VITE_USDT_ADDRESS === "string" &&
+        import.meta.env.VITE_USDT_ADDRESS
+      ? (import.meta.env.VITE_USDT_ADDRESS as `0x${string}`)
+      : null;
 
 const rpcUrl =
   typeof import.meta.env.VITE_PLASMA_RPC_URL === "string" &&
@@ -102,7 +106,7 @@ export function useUsdtBalance(address: string | null): UsdtBalanceState {
         rawMessage.includes("balanceOf") ||
         rawMessage.includes("is not a contract");
       setError(
-        isContractError ? "Solde USDT indisponible sur ce réseau" : rawMessage || "Balance USDT indisponible",
+        isContractError ? "USDT balance unavailable on this network" : rawMessage || "USDT balance unavailable",
       );
       setBalance(null);
       setDecimals(null);

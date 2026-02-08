@@ -43,7 +43,13 @@ export function useWalletClient(): WalletClient | null {
           if (active) setClient(null);
           return;
         }
+        const address = (activeWallet as { address?: string }).address;
+        if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+          if (active) setClient(null);
+          return;
+        }
         const w = createWalletClient({
+          account: address as `0x${string}`,
           chain: plasmaChain,
           transport: custom(provider as import("viem").CustomTransport),
         });

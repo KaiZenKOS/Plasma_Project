@@ -1,1 +1,1 @@
-export type ViewKey = "nexus" | "tontine" | "escrow" | "assurance";
+export type ViewKey = "nexus" | "tontine" | "escrow" | "assurance" | "send";

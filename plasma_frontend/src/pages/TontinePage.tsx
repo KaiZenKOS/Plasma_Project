@@ -118,15 +118,7 @@ export function TontinePage({ onNavigate }: TontinePageProps) {
             Ma Tontine
           </h1>
         </div>
-        <div className="relative">
-          <img
-            src="https://lh3.googleusercontent.com/a/ACg8ocLjZAk7ayWnUP4Nh6F0p1Vyze1HIecTg3t33fSQHei6qjmiWe4=s96-c"
-            alt="KEVIN BJA"
-            className="size-10 rounded-full object-cover border border-border"
-          />
-          <div className="absolute bottom-0 right-0 size-3 bg-green-500 border-2 border-white rounded-full" />
-        </div>
-      </header>
+        </header>
       <main className="flex-1 overflow-y-auto pb-24">
         <div className="px-6 py-4 space-y-6">
           <div className="rounded-2xl border border-border bg-white p-5 space-y-4">
@@ -364,7 +356,7 @@ export function TontinePage({ onNavigate }: TontinePageProps) {
               />
             </div>
             <span className="text-[10px] font-medium text-foreground">
-              Nexus Hub
+              Orbit
             </span>
           </button>
           <button type="button" className="flex flex-col items-center gap-1">

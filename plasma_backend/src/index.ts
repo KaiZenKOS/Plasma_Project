@@ -5,6 +5,7 @@ import { coreRouter } from "./routes/core.js";
 import { publicRouter } from "./routes/public.js";
 import { tontineRouter } from "./routes/tontine.js";
 import { easRouter } from "./routes/eas.js";
+import { insurancesRouter } from "./routes/insurances.js";
 import { config } from "./config.js";
 
 const app = express();
@@ -20,6 +21,7 @@ app.use("/api", publicRouter);
 app.use("/api/core", coreRouter);
 app.use("/api/tontine", tontineRouter);
 app.use("/api/eas", easRouter);
+app.use("/api/insurances", insurancesRouter);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "plasma-backend" });

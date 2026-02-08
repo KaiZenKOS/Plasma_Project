@@ -21,7 +21,7 @@ export function PlasmaNetworkBanner() {
     try {
       await switchToPlasma();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Impossible de changer de réseau");
+      setError(e instanceof Error ? e.message : "Could not switch network");
     } finally {
       setSwitching(false);
     }

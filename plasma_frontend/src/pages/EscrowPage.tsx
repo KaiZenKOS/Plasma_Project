@@ -510,7 +510,7 @@ export function EscrowPage({ onNavigate }: EscrowPageProps) {
             <div className="p-1.5 rounded-xl">
               <Icon icon="solar:home-2-linear" className="size-6 text-foreground" />
             </div>
-            <span className="text-[10px] font-medium text-foreground">Nexus Hub</span>
+            <span className="text-[10px] font-medium text-foreground">Orbit</span>
           </button>
           <button
             type="button"

@@ -66,7 +66,7 @@ createRoot(rootElement).render(
             appearance: {
               theme: "light",
               accentColor: "#295c4f",
-              logo: "/vite.svg",
+              logo: "/orbit.png",
               // Show wallet login first to make MetaMask option obvious
               showWalletLoginFirst: true,
               // Prioritize external wallets (MetaMask first)

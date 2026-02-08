@@ -154,7 +154,7 @@ export function PrivateKeyLogin({ onClose, onSuccess }: PrivateKeyLoginProps) {
 
       <div className="mt-4 rounded-lg bg-yellow-50 p-3">
         <p className="text-xs text-yellow-800">
-          <strong>⚠️ Avertissement de sécurité :</strong> Ne partagez jamais votre
+          <strong>Security warning:</strong> Ne partagez jamais votre
           clé privée. Elle donne un accès complet à votre wallet.
         </p>
       </div>

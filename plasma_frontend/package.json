@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "remove-emojis": "node scripts/remove-emojis.mjs",
+    "remove-emojis:fix": "node scripts/remove-emojis.mjs --fix"
   },
   "dependencies": {
     "@iconify/react": "^5.0.2",

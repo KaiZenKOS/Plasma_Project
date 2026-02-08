@@ -218,10 +218,10 @@ export function EscrowReleasePage() {
                       : "text-[#3b82f6]"
                 }`}>
                   {escrowData.status === EscrowStatus.RELEASED
-                    ? "✅ Released"
+                    ? "Released"
                     : escrowData.status === EscrowStatus.LOCKED
-                      ? "🔒 Locked"
-                      : "📝 Created"}
+                      ? "Locked"
+                      : "Created"}
                 </p>
               </div>
             </div>

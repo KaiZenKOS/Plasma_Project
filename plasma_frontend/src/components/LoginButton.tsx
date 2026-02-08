@@ -22,7 +22,7 @@ export function LoginButton() {
         onClick={login}
         className="inline-flex items-center justify-center rounded-xl bg-[#295c4f] px-5 py-2.5 text-sm font-medium text-white"
       >
-        Demarrer / Se connecter
+        Start / Sign in
       </button>
     );
   }

@@ -1,7 +1,12 @@
 import { Router, Request, Response } from "express";
+import * as cheerio from "cheerio";
 import { createPublicClient, http, parseAbiItem } from "viem";
 import { config } from "../config.js";
 import { pool, query } from "../db/client.js";
+
+const EXPLORER_BASE =
+  (typeof process.env.PLASMA_EXPLORER_URL === "string" && process.env.PLASMA_EXPLORER_URL) ||
+  "https://testnet.plasmascan.to";
 
 export const publicRouter = Router();
 
@@ -27,6 +32,134 @@ function resolveAddress(req: Request): string {
   const queryAddress = (req.query.address ?? "").toString().toLowerCase();
   return paramAddress || queryAddress;
 }
+
+type ScrapedTx = {
+  hash: string;
+  blockNumber?: string;
+  method?: string;
+  from?: string;
+  to?: string;
+  value?: string;
+  valueSymbol?: string;
+  time?: string;
+  age?: string;
+  explorerUrl: string;
+};
+
+async function scrapeAddressTransactions(address: string): Promise<ScrapedTx[]> {
+  const url = `${EXPLORER_BASE}/address/${address}`;
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (compatible; PlasmaApp/1.0; +https://github.com/plasma)",
+      Accept: "text/html,application/xhtml+xml",
+    },
+  });
+  if (!res.ok) return [];
+  const html = await res.text();
+  const $ = cheerio.load(html);
+  const txs: ScrapedTx[] = [];
+  const seen = new Set<string>();
+
+  // Find all links to transaction pages to get hashes
+  $('a[href*="/tx/0x"]').each((_, el) => {
+    const href = $(el).attr("href") ?? "";
+    const m = href.match(/\/tx\/(0x[a-fA-F0-9]{64})/);
+    if (m && !seen.has(m[1])) {
+      seen.add(m[1]);
+      txs.push({
+        hash: m[1],
+        explorerUrl: `${EXPLORER_BASE}/tx/${m[1]}`,
+      });
+    }
+  });
+
+  // If we have a table, try to enrich rows: find table with transaction rows
+  const tableRows = $('table tbody tr').toArray();
+  if (tableRows.length > 0 && txs.length > 0) {
+    tableRows.forEach((tr, i) => {
+      const cells = $(tr).find("td").toArray();
+      const linkCell = $(tr).find('a[href*="/tx/0x"]').first();
+      const hashMatch = (linkCell.attr("href") ?? "").match(/\/tx\/(0x[a-fA-F0-9]{64})/);
+      const hash = hashMatch ? hashMatch[1] : null;
+      if (!hash) return;
+      const tx = txs.find((t) => t.hash === hash) ?? { hash, explorerUrl: `${EXPLORER_BASE}/tx/${hash}` };
+      const idx = txs.findIndex((t) => t.hash === hash);
+      const texts = cells.map((c) => $(c).text().trim());
+      if (texts.length >= 2) tx.blockNumber = texts[1];
+      if (texts.length >= 3) tx.method = texts[2];
+      if (texts.length >= 4) tx.time = texts[3];
+      if (texts.length >= 5) tx.age = texts[4];
+      if (texts.length >= 6) tx.from = texts[5];
+      if (texts.length >= 7) tx.to = texts[6];
+      if (texts.length >= 8) {
+        const val = texts[7];
+        if (val.includes("XPL")) {
+          tx.value = val.replace(/\s*XPL.*/, "").trim();
+          tx.valueSymbol = "XPL";
+        } else if (val.includes("USDT")) {
+          tx.value = val.replace(/\s*USDT.*/, "").trim();
+          tx.valueSymbol = "USDT";
+        } else {
+          tx.value = val;
+        }
+      }
+      if (idx >= 0) txs[idx] = { ...txs[idx], ...tx };
+      else txs.push(tx);
+    });
+  }
+
+  // Fallback: regex on raw HTML for /tx/0x... hashes if cheerio found nothing
+  if (txs.length === 0) {
+    const hashRegex = /\/tx\/(0x[a-fA-F0-9]{64})/g;
+    let match: RegExpExecArray | null;
+    while ((match = hashRegex.exec(html)) !== null) {
+      if (!seen.has(match[1])) {
+        seen.add(match[1]);
+        txs.push({
+          hash: match[1],
+          explorerUrl: `${EXPLORER_BASE}/tx/${match[1]}`,
+        });
+      }
+    }
+  }
+
+  // Dedupe by hash (first occurrence wins)
+  const byHash = new Map<string, ScrapedTx>();
+  for (const tx of txs) {
+    if (!byHash.has(tx.hash)) byHash.set(tx.hash, tx);
+  }
+  return Array.from(byHash.values());
+}
+
+function normalizeAddress(raw: unknown): string | null {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  const hex = s.startsWith("0x") ? s.slice(2) : s;
+  if (/^[a-fA-F0-9]{40}$/.test(hex)) return "0x" + hex.toLowerCase();
+  return null;
+}
+
+/**
+ * GET /api/explorer/txlist
+ * Query: address (required). Returns transactions scraped from Plasmascan address page.
+ */
+publicRouter.get("/explorer/txlist", async (req: Request, res: Response) => {
+  const raw = req.query.address;
+  const address = normalizeAddress(Array.isArray(raw) ? raw[0] : raw);
+  if (!address) {
+    return res.status(400).json({ error: "Invalid or missing address" });
+  }
+  try {
+    const list = await scrapeAddressTransactions(address);
+    res.json({ address, transactions: list });
+  } catch (e) {
+    console.error("Explorer scrape error:", e);
+    res.status(502).json({
+      error: "Could not fetch transaction list from explorer",
+    });
+  }
+});
 
 /**
  * GET /api/user/profile

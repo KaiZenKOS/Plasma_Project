@@ -43,7 +43,7 @@ export function TontineFeatureView({ onNavigate }: TontineFeatureViewProps) {
             onClick={() => onNavigate("nexus")}
             className="p-2 rounded-xl border border-[#e5e7eb] text-[#4a4a4a]"
           >
-            ← Nexus
+            ← Orbit
           </button>
           <h1 className="text-xl font-bold text-[#295c4f]">Tontine</h1>
           <button

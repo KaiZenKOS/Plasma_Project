@@ -97,25 +97,6 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
     loadTontines();
   }, [loadTontines]);
 
-  // Rafraîchir soldes quand l'onglet redevient visible ou toutes les 30s
-  useEffect(() => {
-    if (!walletAddress) return;
-    const refresh = () => {
-      reloadUsdtBalance();
-      reloadXplBalance();
-      loadTontines();
-    };
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") refresh();
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    const interval = setInterval(refresh, 30_000);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisibility);
-      clearInterval(interval);
-    };
-  }, [walletAddress, reloadUsdtBalance, reloadXplBalance, loadTontines]);
-
   const reputation = useMemo(
     () => (score === null ? null : clampScore(score)),
     [score],
@@ -124,59 +105,48 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
   const isConnected = Boolean(walletAddress);
   const balanceValue = isConnected
     ? balanceLoading
-      ? "Chargement..."
+      ? "Loading..."
       : balance
-        ? `${Number(balance).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} USDT`
-        : "Non disponible"
-    : "Connecte ton wallet";
+        ? `${Number(balance).toLocaleString("en-US", { maximumFractionDigits: 2 })} USDT`
+        : "Unavailable"
+    : "Connect your wallet";
   const xplValue = (() => {
     if (!isConnected) return "-";
-    if (xplLoading) return "Chargement...";
-    if (xplBalance != null) return `${Number(xplBalance).toLocaleString("fr-FR", { maximumFractionDigits: 4 })} XPL`;
-    if (xplError) return "Indisponible";
+    if (xplLoading) return "Loading...";
+    if (xplBalance != null) return `${Number(xplBalance).toLocaleString("en-US", { maximumFractionDigits: 4 })} XPL`;
+    if (xplError) return "Unavailable";
     return "-";
   })();
   const activityLine = walletAddress
-    ? "Historique en temps réel depuis la blockchain"
-    : "Aucune activite recente";
+    ? "Real-time history from the blockchain"
+    : "No recent activity";
 
   return (
     <div className="flex flex-col min-h-screen bg-background font-sans text-foreground">
       <header className="flex items-center justify-between px-6 pt-12 pb-4 bg-background z-10">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center size-10 rounded-xl bg-primary/10">
-            <Icon icon="solar:leaf-bold" className="size-6 text-primary" />
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-2">
+            <img src="/orbit.png" alt="Orbit" className="size-14 object-contain" />
+            <span className="text-2xl font-bold text-primary tracking-tight font-heading">
+              Orbit
+            </span>
           </div>
-          <span className="text-2xl font-bold text-primary tracking-tight font-heading">
-            Nexus
-          </span>
+          <p className="text-xs text-muted-foreground font-medium">Make your savings work</p>
         </div>
-        <div className="relative">
-          <img
-            src="https://lh3.googleusercontent.com/a/ACg8ocLjZAk7ayWnUP4Nh6F0p1Vyze1HIecTg3t33fSQHei6qjmiWe4=s96-c"
-            alt="Kevin BJA"
-            className="size-10 rounded-full object-cover border border-border"
-          />
-          <div
-            className={`absolute bottom-0 right-0 size-3 border-2 border-white rounded-full ${
-              isConnected ? "bg-secondary" : "bg-muted"
-            }`}
-          />
-        </div>
-      </header>
+        </header>
       <main className="flex-1 overflow-y-auto pb-24">
         <div className="px-6 py-4 space-y-8">
           <div className="p-6 rounded-2xl border border-border bg-white flex flex-col gap-6">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground mb-1">
-                  Solde USDT
+                  USDT Balance
                 </p>
                 <h2 className="text-3xl font-bold font-heading text-foreground tracking-tight">
                   {balanceValue}
                 </h2>
                 <p className="mt-1 text-base font-semibold text-foreground/80">
-                  Solde XPL: {xplValue}
+                  XPL Balance: {xplValue}
                 </p>
                 <div className="flex items-center gap-1 mt-2 text-sm text-secondary font-medium">
                   <Icon icon="solar:graph-up-linear" className="size-4" />
@@ -219,7 +189,7 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
               <div>
                 <div className="flex items-center gap-2">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Connexion
+                    Connection
                   </p>
                   <span
                     className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
@@ -228,7 +198,7 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
                         : "border-border text-muted-foreground"
                     }`}
                   >
-                    {isConnected ? "Connecte" : "Non connecte"}
+                    {isConnected ? "Connected" : "Not connected"}
                   </span>
                 </div>
                 {walletAddress ? (
@@ -242,14 +212,14 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
                     {balanceError && (
                       <p className="mt-1 text-[10px] text-destructive">
                         {balanceError === "Failed to fetch"
-                          ? "RPC ou réseau indisponible. Réessayez."
+                          ? "RPC or network unavailable. Please try again."
                           : balanceError}
                       </p>
                     )}
                   </div>
                 ) : (
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Connecte ton wallet pour charger le profil.
+                    Connect your wallet to load your profile.
                   </p>
                 )}
               </div>
@@ -276,6 +246,29 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
               Services
             </h3>
             <div className="grid grid-cols-1 gap-4">
+              <button
+                type="button"
+                onClick={() => onNavigate("send")}
+                className="flex items-center p-5 bg-white border border-border rounded-2xl gap-4 active:bg-muted/50 transition-colors"
+              >
+                <div className="flex items-center justify-center size-14 rounded-full bg-emerald-50 text-emerald-600">
+                  <Icon icon="solar:transfer-horizontal-bold" className="size-8" />
+                </div>
+                <div className="flex-1 text-left">
+                  <h4 className="text-lg font-bold text-foreground">
+                    Send
+                  </h4>
+                  <p className="text-sm text-muted-foreground">
+                    Transfer XPL or USDT (P2P)
+                  </p>
+                </div>
+                <div className="p-2 text-muted-foreground">
+                  <Icon
+                    icon="solar:alt-arrow-right-linear"
+                    className="size-6"
+                  />
+                </div>
+              </button>
               <div>
                 <button
                   type="button"
@@ -287,7 +280,7 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
                   </div>
                   <div className="flex-1 text-left">
                     <h4 className="text-lg font-bold text-foreground">
-                      Ma Tontine
+                      My Tontine
                     </h4>
                     <p className="text-sm text-muted-foreground">
                       Manage your savings circles
@@ -304,20 +297,20 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
                   <div className="mt-3 rounded-2xl border border-border bg-white overflow-hidden">
                     <div className="px-4 py-3 border-b border-border flex items-center justify-between">
                       <span className="text-sm font-semibold text-foreground">
-                        Vos tontines
+                        Your tontines
                       </span>
                       <button
                         type="button"
                         onClick={() => onNavigate("tontine")}
                         className="text-xs font-medium text-primary"
                       >
-                        Voir tout
+                        See all
                       </button>
                     </div>
                     <div className="divide-y divide-border">
                       {tontineGroups.length === 0 ? (
                         <div className="px-4 py-5 text-center text-sm text-muted-foreground">
-                          Aucune tontine. Créez-en une ou rejoignez-en une.
+                          No tontine. Create one or join one.
                         </div>
                       ) : (
                         tontineGroups.slice(0, 3).map((group) => {
@@ -375,7 +368,7 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
                 </div>
                 <div className="flex-1 text-left">
                   <h4 className="text-lg font-bold text-foreground">
-                    Assurance
+                    Insurance
                   </h4>
                   <p className="text-sm text-muted-foreground">
                     Protection for your assets
@@ -394,10 +387,10 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
         <div className="mt-2 bg-muted/50 py-8 px-6 rounded-t-3xl min-h-[200px]">
           <div className="mb-6">
             <h3 className="text-lg font-bold font-heading text-foreground mb-2">
-              Historique des transactions
+              Transaction history
             </h3>
             <p className="text-xs text-muted-foreground">
-              Données en temps réel depuis la blockchain Plasma Testnet
+              Real-time data from the Plasma Testnet blockchain
             </p>
           </div>
           <SmartHistory />
@@ -410,7 +403,7 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
               <Icon icon="solar:home-2-bold" className="size-6 text-primary" />
             </div>
             <span className="text-[10px] font-medium text-primary">
-              Nexus Hub
+              Orbit
             </span>
           </button>
           <button
@@ -455,7 +448,7 @@ export function NexusHubPage({ onNavigate }: NexusHubPageProps) {
               />
             </div>
             <span className="text-[10px] font-medium text-foreground">
-              Assurance
+              Insurance
             </span>
           </button>
         </div>

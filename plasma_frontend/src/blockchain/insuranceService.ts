@@ -36,13 +36,21 @@ export const INSURANCE_SERVICE_ABI = [
     inputs: [{ name: "policyId", type: "uint256" }],
     name: "getPolicy",
     outputs: [
-      { name: "policyHolder", type: "address" },
+      { name: "user", type: "address" },
       { name: "tontineId", type: "uint256" },
+      { name: "coverageAmount", type: "uint256" },
       { name: "premiumPaid", type: "uint256" },
-      { name: "status", type: "uint8" }, // 0=Active, 1=Claimed
+      { name: "active", type: "bool" },
       { name: "purchasedAt", type: "uint256" },
     ],
     stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "policyId", type: "uint256" }],
+    name: "claimPolicy",
+    outputs: [],
+    stateMutability: "nonpayable",
     type: "function",
   },
   {

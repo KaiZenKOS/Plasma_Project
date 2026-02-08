@@ -2,10 +2,11 @@ import { useMemo, useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import type { ViewKey } from "./types/navigation";
 import { PlasmaNetworkBanner } from "./components/PlasmaNetworkBanner";
-import { TontineFeatureView } from "./features/tontine";
+import { TontineFeatureView, TontineToastProvider } from "./features/tontine";
 import { AssurancePage } from "./pages/AssurancePage";
 import { EscrowPage } from "./pages/EscrowPage";
 import { NexusHubPage } from "./pages/NexusHubPage";
+import { SendPage } from "./pages/SendPage";
 import { TontineJoinPage } from "./pages/TontineJoinPage";
 import { EscrowReleasePage } from "./pages/EscrowReleasePage";
 import { TontineDetailsPage } from "./pages/TontineDetailsPage";
@@ -21,6 +22,8 @@ function AppContent() {
         return <EscrowPage onNavigate={setActiveView} />;
       case "assurance":
         return <AssurancePage onNavigate={setActiveView} />;
+      case "send":
+        return <SendPage onNavigate={setActiveView} />;
       case "nexus":
       default:
         return <NexusHubPage onNavigate={setActiveView} />;
@@ -38,6 +41,7 @@ function AppContent() {
 // BrowserRouter is now in main.tsx to ensure proper provider hierarchy
 function App() {
   return (
+      <TontineToastProvider>
       <Routes>
         {/* QR Code Landing Pages */}
         <Route path="/tontine/join/:id" element={<TontineJoinPage />} />
@@ -52,6 +56,7 @@ function App() {
         {/* Fallback */}
         <Route path="/" element={<Navigate to="/nexus" replace />} />
       </Routes>
+      </TontineToastProvider>
   );
 }
 

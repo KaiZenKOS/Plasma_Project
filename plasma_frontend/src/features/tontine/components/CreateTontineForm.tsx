@@ -1,6 +1,7 @@
 import { useCallback, useState, useEffect } from "react";
 import { Lock, Unlock, CheckCircle } from "lucide-react";
 import { useUser } from "../../../context/UserContext";
+import { useUsdtBalance } from "../../../hooks/useUsdtBalance";
 import { useTontineToast } from "../context/ToastContext";
 import { useWalletClient } from "../hooks/useWalletClient";
 import { useTontineWrite } from "../hooks/useTontineWrite";
@@ -11,8 +12,8 @@ import { TONTINE_CONTRACT_ADDRESS, USDT_DECIMALS } from "../config";
 import { formatUnits, parseUnits } from "viem";
 
 const PERIOD_OPTIONS = [
-  { label: "Hebdomadaire", value: "weekly" as const },
-  { label: "Mensuel", value: "monthly" as const },
+  { label: "Weekly", value: "weekly" as const },
+  { label: "Monthly", value: "monthly" as const },
 ] as const;
 
 const EXPLORER_URL = typeof import.meta.env.VITE_PLASMA_EXPLORER_URL === "string" && import.meta.env.VITE_PLASMA_EXPLORER_URL
@@ -77,6 +78,9 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
   const totalAmount = contributionNum + collateralNum;
   const totalAmountWei = totalAmount > 0 ? parseUnits(totalAmount.toFixed(USDT_DECIMALS), USDT_DECIMALS) : 0n;
 
+  // Solde USDT disponible (même source que la page d'accueil)
+  const { balance: usdtBalance, loading: balanceLoading, reload: reloadUsdtBalance } = useUsdtBalance(walletAddress);
+
   // Check USDT allowance
   const { allowance, loading: allowanceLoading, reload: reloadAllowance } = useUsdtAllowance(
     walletAddress,
@@ -95,20 +99,20 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
       try {
         await publicClient.waitForTransactionReceipt({ hash: approveHash });
         setApproving(false);
-        toast("USDT approuvé avec succès!", "success");
-        // Reload allowance to update UI
+        toast("USDT approved successfully!", "success");
         await reloadAllowance();
+        await reloadUsdtBalance();
         setApproveHash(null);
       } catch (err) {
         setApproving(false);
         console.error("Error waiting for approval receipt:", err);
-        toast("Erreur lors de l'approbation", "error");
+        toast("Error during approval", "error");
         setApproveHash(null);
       }
     };
 
     waitForApproval();
-  }, [approveHash, walletClient, toast, reloadAllowance]);
+  }, [approveHash, walletClient, toast, reloadAllowance, reloadUsdtBalance]);
 
   // Wait for transaction receipt when hash is available
   useEffect(() => {
@@ -126,7 +130,7 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
         const latestId = Number(nextId) - 1;
         if (latestId >= 0) {
           setTontineId(latestId);
-          toast("Tontine créée avec succès sur la blockchain!", "success");
+          toast("Tontine created successfully on the blockchain!", "success");
           // Trigger history refresh
           window.dispatchEvent(new CustomEvent("transaction-confirmed", { detail: { txHash } }));
           onSuccess?.();
@@ -142,11 +146,11 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
   const addMember = useCallback(() => {
     const addr = memberInput.trim().toLowerCase();
     if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) {
-      toast("Adresse wallet invalide (0x...)", "error");
+      toast("Invalid wallet address (0x...)", "error");
       return;
     }
     if (members.includes(addr)) {
-      toast("Déjà ajouté", "error");
+      toast("Already added", "error");
       return;
     }
     setMembers((prev) => [...prev, addr]);
@@ -160,7 +164,7 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
   // Handle USDT approval
   const handleApprove = useCallback(async () => {
     if (!USDT_ADDRESS || !TONTINE_CONTRACT_ADDRESS || !walletClient?.account || totalAmountWei === 0n) {
-      toast("Configuration manquante ou montant invalide", "error");
+      toast("Missing configuration or invalid amount", "error");
       return;
     }
 
@@ -177,10 +181,10 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
       });
 
       setApproveHash(hash);
-      toast(`Approbation envoyée! Hash: ${hash.slice(0, 10)}…`, "success");
+      toast(`Approval sent! Hash: ${hash.slice(0, 10)}…`, "success");
     } catch (err) {
       setApproving(false);
-      const msg = err instanceof Error ? err.message : "Erreur lors de l'approbation";
+      const msg = err instanceof Error ? err.message : "Error during approval";
       toast(msg, "error");
       setApproveHash(null);
     }
@@ -189,19 +193,19 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
   // Handle create tontine
   const handleCreateTontine = useCallback(async () => {
     if (!creatorWallet || !walletClient) {
-      toast("Connectez votre wallet pour créer une tontine.", "error");
+      toast("Connect your wallet to create a tontine.", "error");
       return;
     }
     if (contributionNum <= 0) {
-      toast("Indiquez un montant de cotisation > 0.", "error");
+      toast("Enter a contribution amount > 0.", "error");
       return;
     }
     if (!TONTINE_CONTRACT_ADDRESS) {
-      toast("Contrat Tontine non configuré.", "error");
+      toast("Tontine contract not configured.", "error");
       return;
     }
     if (needsApproval) {
-      toast("Veuillez d'abord approuver l'utilisation de USDT", "error");
+      toast("Please approve USDT usage first", "error");
       return;
     }
 
@@ -225,11 +229,11 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
           setTontineId(result.tontineId);
         }
       } else {
-        toast(txError || "Erreur lors de la création", "error");
+        toast(txError || "Error creating tontine", "error");
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      toast(msg || "Erreur lors de la création", "error");
+      toast(msg || "Error creating tontine", "error");
     }
   }, [creatorWallet, walletClient, contribution, collateral, period, contributionNum, createTontine, txError, resetTx, toast, needsApproval]);
 
@@ -241,23 +245,23 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
   return (
     <div className="rounded-2xl border border-[#e5e7eb] bg-[#FFFFFF] p-8" style={{ boxShadow: "none" }}>
       <h2 className="text-xl font-bold text-[#295c4f] mb-6" style={{ fontFamily: "Outfit, DM Sans, sans-serif" }}>
-        Créer une tontine
+        Create a tontine
       </h2>
 
       <div className="space-y-5">
         <div>
-          <label className="block text-sm font-medium text-[#4a4a4a] mb-2">Nom</label>
+          <label className="block text-sm font-medium text-[#4a4a4a] mb-2">Name</label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Ex: Tontine famille"
+            placeholder="e.g. Family tontine"
             className="w-full rounded-xl border border-[#e5e7eb] bg-[#f8fafc] px-4 py-3 text-[#1a1a1a] outline-none focus:border-[#295c4f]"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-[#4a4a4a] mb-2">Période</label>
+          <label className="block text-sm font-medium text-[#4a4a4a] mb-2">Period</label>
           <div className="flex gap-3">
             {PERIOD_OPTIONS.map((opt) => (
               <button
@@ -277,20 +281,20 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-[#4a4a4a] mb-2">Cotisation (USDT)</label>
+          <label className="block text-sm font-medium text-[#4a4a4a] mb-2">Contribution (USDT)</label>
           <input
             type="number"
             min="0"
             step="0.01"
             value={contribution}
             onChange={(e) => setContribution(e.target.value)}
-            placeholder="Ex: 50"
+            placeholder="e.g. 50"
             className="w-full rounded-xl border border-[#e5e7eb] bg-[#f8fafc] px-4 py-3 text-[#1a1a1a] outline-none focus:border-[#295c4f]"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-[#4a4a4a] mb-2">Nantissement (USDT, optionnel)</label>
+          <label className="block text-sm font-medium text-[#4a4a4a] mb-2">Collateral (USDT, optional)</label>
           <input
             type="number"
             min="0"
@@ -303,7 +307,7 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-[#4a4a4a] mb-2">Membres (adresses wallet)</label>
+          <label className="block text-sm font-medium text-[#4a4a4a] mb-2">Members (wallet addresses)</label>
           <div className="flex gap-2">
             <input
               type="text"
@@ -318,7 +322,7 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
               onClick={addMember}
               className="py-3 px-4 rounded-xl border border-[#295c4f] text-[#295c4f] font-medium text-sm"
             >
-              Ajouter
+              Add
             </button>
           </div>
           {members.length > 0 && (
@@ -331,42 +335,57 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
                     onClick={() => removeMember(addr)}
                     className="text-[#ef4444] hover:underline ml-2 shrink-0"
                   >
-                    Retirer
+                    Remove
                   </button>
                 </li>
               ))}
             </ul>
           )}
-          <p className="mt-1 text-xs text-[#4a4a4a]">Vous êtes créateur et premier membre. Ajoutez les autres participants.</p>
+          <p className="mt-1 text-xs text-[#4a4a4a]">You are the creator and first member. Add other participants.</p>
         </div>
 
-        {/* Allowance Status */}
+        {/* Solde disponible + Allowance Status (même source USDT que la page d'accueil) */}
         {walletAddress && TONTINE_CONTRACT_ADDRESS && totalAmountWei > 0n && (
           <div className="rounded-xl border border-[#e5e7eb] bg-[#f8fafc] p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-[#4a4a4a]">Available USDT balance:</span>
+              <span className="text-sm font-semibold text-[#111827]">
+                {balanceLoading
+                  ? "…"
+                  : usdtBalance != null
+                    ? `${Number(usdtBalance).toLocaleString("en-US", { maximumFractionDigits: 2 })} USDT`
+                    : "—"}
+              </span>
+            </div>
+            {usdtBalance != null && totalAmount > 0 && Number(usdtBalance) < totalAmount && (
+              <p className="text-xs text-[#ef4444]">
+                Insufficient balance. You need {totalAmount.toFixed(2)} USDT (contribution + collateral).
+              </p>
+            )}
             {allowanceLoading ? (
-              <p className="text-sm text-[#6b7280]">Vérification de l'approbation USDT...</p>
+              <p className="text-sm text-[#6b7280]">Checking USDT approval...</p>
             ) : allowance !== null ? (
               <>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-[#4a4a4a]">Approbation USDT:</span>
+                  <span className="text-sm text-[#4a4a4a]">USDT approval:</span>
                   <span className={`text-sm font-semibold ${hasEnoughAllowance ? "text-[#10b981]" : "text-[#f59e0b]"}`}>
                     {formatUnits(allowance, USDT_DECIMALS)} / {totalAmount.toFixed(2)} USDT
                   </span>
                 </div>
                 {needsApproval && (
                   <p className="text-xs text-[#f59e0b]">
-                    ⚠️ Approbation insuffisante. Approuvez d'abord l'utilisation de USDT.
+                    Insufficient approval. Approve USDT usage first.
                   </p>
                 )}
                 {hasEnoughAllowance && (
                   <p className="text-xs text-[#10b981] flex items-center gap-1">
                     <CheckCircle className="size-3" />
-                    Approbation suffisante. Vous pouvez créer la tontine.
+                    Approval sufficient. You can create the tontine.
                   </p>
                 )}
               </>
             ) : (
-              <p className="text-sm text-[#6b7280]">Impossible de vérifier l'approbation USDT</p>
+              <p className="text-sm text-[#6b7280]">Could not verify USDT approval</p>
             )}
           </div>
         )}
@@ -382,12 +401,12 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
             {isApproving ? (
               <>
                 <div className="size-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Approbation en cours...
+                Approving...
               </>
             ) : (
               <>
                 <Unlock className="size-5" />
-                🔓 Unlock USDT ({totalAmount.toFixed(2)} USDT)
+                Unlock USDT ({totalAmount.toFixed(2)} USDT)
               </>
             )}
           </button>
@@ -401,12 +420,12 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
             {isCreating ? (
               <>
                 <div className="size-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                {txState === "confirming" ? "Confirmez dans votre wallet…" : "Transaction envoyée"}
+                {txState === "confirming" ? "Confirm in your wallet…" : "Transaction sent"}
               </>
             ) : (
               <>
                 <CheckCircle className="size-5" />
-                ✅ Create Tontine
+                Create Tontine
               </>
             )}
           </button>
@@ -414,16 +433,16 @@ export function CreateTontineForm({ onSuccess }: { onSuccess?: () => void }) {
 
         {approveHash && (
           <div className="rounded-xl border-2 border-[#f59e0b] bg-[#f59e0b]/5 p-4 space-y-2">
-            <p className="text-sm font-semibold text-[#f59e0b]">Approbation envoyée!</p>
+            <p className="text-sm font-semibold text-[#f59e0b]">Approval sent!</p>
             <a
               href={`${EXPLORER_URL}/tx/${approveHash}`}
               target="_blank"
               rel="noopener noreferrer"
               className="block text-sm text-[#f59e0b] hover:underline break-all"
             >
-              Voir sur l'explorateur: {approveHash.slice(0, 10)}…{approveHash.slice(-8)}
+              View on explorer: {approveHash.slice(0, 10)}…{approveHash.slice(-8)}
             </a>
-            <p className="text-xs text-[#6b7280]">En attente de confirmation...</p>
+            <p className="text-xs text-[#6b7280]">Waiting for confirmation...</p>
           </div>
         )}
 

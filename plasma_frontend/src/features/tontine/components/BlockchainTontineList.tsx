@@ -14,7 +14,7 @@ export function BlockchainTontineList() {
   if (!TONTINE_CONTRACT_ADDRESS) {
     return (
       <div className="rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-6 text-center text-[#4a4a4a]">
-        <p className="text-sm">Contrat Tontine non configuré.</p>
+        <p className="text-sm">Tontine contract not configured.</p>
       </div>
     );
   }
@@ -38,8 +38,8 @@ export function BlockchainTontineList() {
   if (tontines.length === 0) {
     return (
       <div className="rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-12 text-center text-[#4a4a4a]">
-        <p className="font-medium">Aucune tontine sur la blockchain</p>
-        <p className="text-sm mt-1">Créez-en une pour commencer.</p>
+        <p className="font-medium">No tontine on the blockchain</p>
+        <p className="text-sm mt-1">Create one to get started.</p>
       </div>
     );
   }
@@ -48,14 +48,14 @@ export function BlockchainTontineList() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-[#295c4f]" style={{ fontFamily: "Outfit, DM Sans, sans-serif" }}>
-          Tontines sur la blockchain ({tontines.length})
+          Tontines on blockchain ({tontines.length})
         </h2>
         <button
           type="button"
           onClick={() => reload()}
           className="text-sm text-[#295c4f] hover:underline"
         >
-          Actualiser
+          Refresh
         </button>
       </div>
 
@@ -64,7 +64,7 @@ export function BlockchainTontineList() {
           const isMember = walletAddress
             ? tontine.members.some((m) => m.toLowerCase() === walletAddress.toLowerCase())
             : false;
-          const frequencyLabel = tontine.frequencySeconds >= 30 * 24 * 60 * 60 ? "Mensuel" : "Hebdomadaire";
+          const frequencyLabel = tontine.frequencySeconds >= 30 * 24 * 60 * 60 ? "Monthly" : "Weekly";
 
           return (
             <div
@@ -94,10 +94,10 @@ export function BlockchainTontineList() {
                   </span>
                 </p>
                 <p className="text-[#4a4a4a]">
-                  <strong className="text-[#1a1a1a]">Membres:</strong> {tontine.memberCount}
+                  <strong className="text-[#1a1a1a]">Members:</strong> {tontine.memberCount}
                 </p>
                 <p className="text-[#4a4a4a]">
-                  <strong className="text-[#1a1a1a]">Cotisation:</strong> ${Number(tontine.contributionAmount).toFixed(2)} USDT
+                  <strong className="text-[#1a1a1a]">Contribution:</strong> ${Number(tontine.contributionAmount).toFixed(2)} USDT
                 </p>
                 {Number(tontine.collateralAmount) > 0 && (
                   <p className="text-[#4a4a4a]">
@@ -109,7 +109,7 @@ export function BlockchainTontineList() {
               <div className="mt-auto space-y-2">
                 {isMember ? (
                   <p className="text-sm text-[#295c4f] font-medium text-center">
-                    ✓ Vous êtes membre
+                    You are a member
                   </p>
                 ) : (
                   <JoinTontine tontineId={tontine.id} onSuccess={reload} />
@@ -120,7 +120,7 @@ export function BlockchainTontineList() {
                   rel="noopener noreferrer"
                   className="block text-xs text-center text-[#295c4f] hover:underline"
                 >
-                  Voir sur l'explorateur →
+                  View on explorer
                 </a>
               </div>
             </div>

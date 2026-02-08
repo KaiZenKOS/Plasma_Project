@@ -354,7 +354,7 @@ function TontineCard({
         <div className="rounded-xl bg-gradient-to-br from-[#3b82f6]/5 to-[#8b5cf6]/5 p-4 border border-[#3b82f6]/20">
           <div className="flex items-center gap-2 mb-3">
             <Shuffle className="size-4 text-[#3b82f6]" />
-            <span className="text-sm font-semibold text-[#1e40af]">🎲 Next to Pay</span>
+            <span className="text-sm font-semibold text-[#1e40af]">Next to Pay</span>
           </div>
           <div className="flex items-center gap-3">
             <MemberAvatar address={randomMember} />
@@ -579,7 +579,7 @@ export function TontineList({ onSelectTontine }: TontineListProps) {
 
       {/* DEBUG MODE: Show raw data */}
       <div className="mt-8 rounded-xl border border-[#e5e7eb] bg-[#f9fafb] p-4 rounded-lg">
-        <h3 className="text-sm font-semibold text-[#111827] mb-2">🔍 Debug: Raw Blockchain Data</h3>
+        <h3 className="text-sm font-semibold text-[#111827] mb-2">Debug: Raw Blockchain Data</h3>
         <pre className="text-xs bg-white p-4 rounded-lg border border-[#e5e7eb] overflow-auto max-h-96">
           {JSON.stringify(
             tontines.map((t) => ({

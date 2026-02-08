@@ -394,7 +394,7 @@ export function TontineDashboard({ groupId, onBack }: TontineDashboardProps) {
               </button>
             )}
             {detail?.creator_signed_at && (
-              <p className="text-sm text-[#295c4f] font-medium">✓ Tontine signée et active</p>
+              <p className="text-sm text-[#295c4f] font-medium">Tontine signée et active</p>
             )}
             <button
               type="button"

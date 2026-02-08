@@ -291,7 +291,7 @@ export function TontineJoinPage() {
 
               <div className={`p-4 rounded-xl ${tontineData.active ? "bg-[#10b981]/10" : "bg-[#ef4444]/10"}`}>
                 <p className={`text-sm font-semibold text-center ${tontineData.active ? "text-[#10b981]" : "text-[#ef4444]"}`}>
-                  {tontineData.active ? "🟢 Active" : "🔴 Inactive"}
+                  {tontineData.active ? "Active" : "Inactive"}
                 </p>
               </div>
 
@@ -310,7 +310,7 @@ export function TontineJoinPage() {
                       </div>
                       {needsApproval && (
                         <p className="text-xs text-[#f59e0b]">
-                          ⚠️ Approbation insuffisante. Approuvez d'abord l'utilisation de USDT.
+                          Approbation insuffisante. Approuvez d'abord l'utilisation de USDT.
                         </p>
                       )}
                       {hasEnoughAllowance && (
@@ -347,7 +347,7 @@ export function TontineJoinPage() {
                 ) : (
                   <>
                     <Unlock className="size-5" />
-                    🔓 Unlock USDT ({tontineData.contributionAmount} USDT)
+                    Unlock USDT ({tontineData.contributionAmount} USDT)
                   </>
                 )}
               </button>
@@ -365,7 +365,7 @@ export function TontineJoinPage() {
                 ) : (
                   <>
                     <CheckCircle className="size-5" />
-                    ✅ Pay & Join
+                    Pay & Join
                   </>
                 )}
               </button>
